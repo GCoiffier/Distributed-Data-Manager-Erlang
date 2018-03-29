@@ -2,6 +2,8 @@
 
 %% -----------------------------------------------------------------------------
 
+-import(storage, [distant_main/0]).
+
 %% -----------------------------------------------------------------------------
 -export([run/0]).
 
@@ -14,13 +16,26 @@
 
 -define(MAX_SON, 10).
 
-%-define(RING_SIZE_SMALL, 5).
-%-define(RING_SIZE_MEDIUM, 10).
-%-define(RING_SIZE_LARGE, 20)
+-define(RING_SIZE_SMALL, 5).
+-define(RING_SIZE_MEDIUM, 10).
+-define(RING_SIZE_LARGE, 20).
 
 %% -----------------------------------------------------------------------------
 
-run() -> ok.
+-on_load(run/0).
+
+
+run() ->
+    io:fwrite("Initializing~n"),
+    register(client,self()),
+    Pid = spawn(storage, distant_main, []),
+    register(test,Pid),
+    test ! {are_you_alive, self()},
+    receive
+        yes -> io:fwrite("Spawning successful~n")
+    after 5000 ->
+        io:fwrite("Time out~n")
+    end.
 
 send_data(FileName,Status) ->
     %%
@@ -34,7 +49,14 @@ send_data(FileName,Status) ->
         simple -> io:fwrite("Storage mode = SIMPLE~n");
         distributed -> io:fwrite("Storage mode = DISTRIBUTED~n");
         critical -> io:fwrite("Storage mode = CRITICAL~n");
-        _ -> io:fwrite("Storage mode should be in {simple,distributed,critical}. Aborting.~n")
+        _ -> io:fwrite("Storage mode should be in {simple,distributed,critical}. Aborting.~n"),
+             exit(send_data)
+    end,
+
+    test ! {store_data, FileName, Status, self()},
+
+    receive
+        ack -> io:fwrite("ok~n")
     end.
 
 
