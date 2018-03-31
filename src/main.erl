@@ -29,7 +29,12 @@ run() ->
     io:fwrite("Initializing~n"),
     register(client,self()),
     Pid = spawn(storage, distant_main, []),
-    register(test,Pid),
+
+    case whereis(test) of
+        undefined -> register(test,Pid);
+        _ -> ok
+    end,
+
     test ! {are_you_alive, self()},
     receive
         yes -> io:fwrite("Spawning successful~n")
@@ -37,7 +42,7 @@ run() ->
         io:fwrite("Time out~n")
     end.
 
-send_data(FileName,Status) ->
+send_data(Filename,Status) ->
     %%
     % Reads data from FileName and send it to the network
     % Three storage mode are possible
@@ -45,6 +50,8 @@ send_data(FileName,Status) ->
     %     - Distributed : the data is cut in parts and stored in various processes
     %     - Critical : the data is copied several times and stored in whole in different processes
     %%
+    io:fwrite("~p~n",[registered()]),
+
     case Status of
         simple -> io:fwrite("Storage mode = SIMPLE~n");
         distributed -> io:fwrite("Storage mode = DISTRIBUTED~n");
@@ -53,7 +60,9 @@ send_data(FileName,Status) ->
              exit(send_data)
     end,
 
-    test ! {store_data, FileName, Status, self()},
+    io:fwrite("~p~n", [whereis(test)]),
+
+    test ! {store_data, Filename, Status, self()},
 
     receive
         ack -> io:fwrite("ok~n")

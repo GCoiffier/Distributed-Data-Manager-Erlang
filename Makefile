@@ -1,5 +1,8 @@
 NAME = NONE
+COOKIE = "toto"
 PHONY : all
 
 client :
-	erl -name
+	erl -name $NAME -setcookie $COOKIE
+
+all : client
