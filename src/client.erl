@@ -9,7 +9,6 @@
 -export([compile/2, send_code/2]).
 
 %% -----------------------------------------------------------------------------
--define(MAX_SON, 10).
 -define(TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
 
@@ -26,23 +25,24 @@
 main() ->
     % Main function
     io:fwrite("Initializing~n"),
-    register(client,self()),
+
     compile:file(server),
     compile:file(query),
     compile:file(storage),
-    Pid = spawn(server,server_init, []),
-    case whereis(test) of
-        undefined -> register(test,Pid);
-        _ -> ok
-    end,
 
-    test ! {are_you_alive, self()},
-    receive
-        yes -> io:fwrite("Spawning successful~n")
+    % create a subprocess whose goal is to store the nodes' ID we have access to
+    NPid = spawn(?MODULE, store_neighbours, [sets:new()]),
+    register(links, NPid),
+
+    ManagerPid = spawn(server, server_init, []),
+    ManagerPid ! {are_you_done, self()},
+
+    receive {init_done, L} ->
+        io:fwrite("Spawning successful. Keeping a trace of the created nodes~n"),
+        links ! {add_list, L}
     after ?TIMEOUT_TIME ->
         io:fwrite("Time out~n")
     end.
-
 
 
 send_data(Filename,Status) ->
@@ -66,7 +66,7 @@ send_data(Filename,Status) ->
     Data = readfile(Path),
     ?LOG({"Data to be sent :", Data}),
 
-    test ! {store_data, {Filename, Data, Status, self()}},
+    % test ! {store_data, {Filename, Data, Status, self()}},
     receive
         ack -> io:fwrite("Success.~n");
         fail -> io:fwrite("Failed.~n")
@@ -81,7 +81,9 @@ fetch_data(Filename) ->
     % If the Data couldn't be found, does nothing and write an
     %   error message in console
     %%
-    test ! {fetch_data, {Filename, self()}},
+
+    % test ! {fetch_data, {Filename, self()}},
+
     receive
 
         not_found ->
@@ -117,9 +119,27 @@ release_data(Filename) ->
 
 
 
-broadcast(Message) -> ok.
+broadcast(Message) -> ?LOG(Message), ok.
 
 % ------------------------------ Utilities -------------------------------------
+
+store_neighbours(S) ->
+    receive
+        {get, Pid} -> Pid ! sets:to_list(S),
+                      store_neighbours(S);
+
+        {add, X} -> store_neighbours(sets:add_element(X,S));
+
+        {add_list, L} -> ?LOG("add list"),
+                         NewSet = lists:foldl(fun(X,Set) -> sets:add_element(X,Set) end, S, L),
+                         store_neighbours(NewSet);
+
+        {del, X} -> store_neighbours(sets:del_element(X,S));
+
+        {kill} -> ok
+    end.
+
+% ------------------------------------------------------------------------------
 
 % Reads the content of a txt file and convert it to a list of strings
 readfile(Filename) ->
