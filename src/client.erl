@@ -1,32 +1,36 @@
 -module(client).
 
 %% -----------------------------------------------------------------------------
-
--import(storage, [distant_main/0]).
-
+-import(server, [server_init/0]).
 %% -----------------------------------------------------------------------------
--export([run/0]).
-
--export([send_data/2]).
--export([fetch_data/1]).
-
+-export([main/0]).
+-export([send_data/2, fetch_data/1, release_data/1]).
+-export([broadcast/1]).
 -export([compile/2, send_code/2]).
 
 %% -----------------------------------------------------------------------------
-
 -define(MAX_SON, 10).
 -define(TIMEOUT_TIME, 1000).
-
 %% -----------------------------------------------------------------------------
 
--on_load(run/0).
+-define(DEBUG,true).
+-ifdef(DEBUG).
+-define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
+-else.
+-define(LOG(X), true).
+-endif.
 
+%% -----------------------------------------------------------------------------
+-on_load(main/0).
 
-run() ->
+main() ->
+    % Main function
     io:fwrite("Initializing~n"),
     register(client,self()),
-    Pid = spawn(storage, distant_main, []),
-
+    compile:file(server),
+    compile:file(query),
+    compile:file(storage),
+    Pid = spawn(server,server_init, []),
     case whereis(test) of
         undefined -> register(test,Pid);
         _ -> ok
@@ -39,6 +43,8 @@ run() ->
         io:fwrite("Time out~n")
     end.
 
+
+
 send_data(Filename,Status) ->
     %%
     % Reads data from Filename and send it to the network
@@ -47,17 +53,18 @@ send_data(Filename,Status) ->
     %     - Distributed : the data is cut in parts and stored in various processes
     %     - Critical : the data is copied several times and stored in whole in different processes
     %%
-
     case Status of
-        simple -> io:fwrite("Storage mode = SIMPLE~n");
-        distributed -> io:fwrite("Storage mode = DISTRIBUTED~n");
-        critical -> io:fwrite("Storage mode = CRITICAL~n");
+        simple -> ?LOG("Storage mode = SIMPLE");
+        distributed -> ?LOG("Storage mode = DISTRIBUTED");
+        critical -> ?LOG("Storage mode = CRITICAL");
         _ -> io:fwrite("Storage mode should be in {simple,distributed,critical}. Aborting.~n"),
              exit(send_data)
     end,
 
-    Data = readlines(Filename),
-    io:fwrite("Data to be sent : ~p~n", [Data]),
+    Path = string:concat("../data/",Filename),
+
+    Data = readfile(Path),
+    ?LOG({"Data to be sent :", Data}),
 
     test ! {store_data, {Filename, Data, Status, self()}},
     receive
@@ -68,17 +75,64 @@ send_data(Filename,Status) ->
     end.
 
 
-fetch_data(Filename) -> readlines(Filename).
+fetch_data(Filename) ->
+    %%
+    % Retrieve data Filename from the network.
+    % If the Data couldn't be found, does nothing and write an
+    %   error message in console
+    %%
+    test ! {fetch_data, {Filename, self()}},
+    receive
 
-readlines(Filename) ->
-    io:fwrite("reading lines from file ~p... ", [Filename]),
+        not_found ->
+            io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
+
+        {data,Value} ->
+            [Data | _ ] = Value,
+            ?LOG({"Data =", Data}),
+            writefile(Filename, Data)
+
+    after ?TIMEOUT_TIME ->
+        io:fwrite("No data received in time. Assuming connection failed.~n")
+    end.
+
+release_data(Filename) ->
+    %%
+    % Retrieve data Filename and supresses it from the network
+    % If the Data couldn't be found, does nothing
+    %%
+    test ! {release_data, {Filename, self()}},
+    receive
+        not_found ->
+            io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
+
+        {data,Value} ->
+            [Data | _ ] = Value,
+            ?LOG({"Data =", Data}),
+            writefile(Filename, Data)
+
+    after ?TIMEOUT_TIME ->
+        io:fwrite("No data received in time. Assuming connection failed.~n")
+    end.
+
+
+
+broadcast(Message) -> ok.
+
+% ------------------------------ Utilities -------------------------------------
+
+% Reads the content of a txt file and convert it to a list of strings
+readfile(Filename) ->
+    ?LOG({"reading lines from file ", Filename}),
     {ok, Data} = file:read_file(Filename),
     binary:split(Data, [<<"\n">>], [global]),
-    io:fwrite("Done.~n"),
+    ?LOG("Reading Done."),
     binary:bin_to_list(Data).
 
+writefile(Filename,File) ->
+    file:write_file(string:concat("../output/", Filename), io_lib:fwrite("~s", [File])),
+    io:fwrite("Data successfully retrieved and stored in output/~p", [Filename]).
 
-% asks ID to compile Filename
 compile(ID, Filename) -> spawn(ID, compile, file, [Filename]).
 
 % sends a code

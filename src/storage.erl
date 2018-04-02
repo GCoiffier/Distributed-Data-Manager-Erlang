@@ -1,31 +1,29 @@
 -module(storage).
 
--define(debug,true).
+%% ----------------------------------------------------------------------------
+-export([storage_init/0]).
 
 %% ----------------------------------------------------------------------------
--export([distant_main/0]).
-
-%% ----------------------------------------------------------------------------
--ifdef(debug).
--define(LOG(X), io:format("<Module ~p, Line~p> : ~p~n", [?MODULE,?LINE,X])).
+-define(DEBUG,true).
+-ifdef(DEBUG).
+-define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
 -define(LOG(X), true).
 -endif.
 %% ----------------------------------------------------------------------------
 
 
-distant_main() ->
-    io:fwrite("Distant main called~n"),
+storage_init() ->
     DataDict = dict:new(),
-    run(DataDict).
+    storage_run(DataDict).
 
-run(DataDict) ->
+storage_run(DataDict) ->
     receive
         {are_you_alive, Pid} ->
             ?LOG("Someone asked me if I was alive!"),
 
             Pid ! yes,
-            run(DataDict);
+            storage_run(DataDict);
 
         {store_data, Request} ->
 
@@ -36,42 +34,67 @@ run(DataDict) ->
             case Status of
 
                 simple ->
-                    store_simple(DataDict, Dataname, Data),
+                    DataDictUpdated = store_simple(DataDict, Dataname, Data),
                     Pid ! ack;
 
                 distributed ->
-                    store_distributed(DataDict, Dataname, Data),
+                    DataDictUpdated = store_distributed(DataDict, Dataname, Data),
                     Pid ! ack;
 
                 critical ->
-                    store_critical(DataDict, Dataname, Data),
+                    DataDictUpdated = store_critical(DataDict, Dataname, Data),
                     Pid ! ack;
 
                 _ ->
                     io:fwrite("received store_data instruction with invalid status !"),
-                    Pid ! fail
+                    Pid ! fail,
+                    DataDictUpdated = DataDict
             end,
-            run(DataDict);
+            storage_run(DataDictUpdated);
 
         {fetch_data, Request} ->
             ?LOG("Someone asked me to give him data!"),
             {Dataname, Pid} = Request,
-            X = dict:fetch(Dataname, DataDict),
-            run(DataDict);
+            case dict:find(Dataname, DataDict) of
+                error -> Pid ! not_found;
+                {ok, Value} -> Pid ! {data, Value}
+            end,
+            storage_run(DataDict);
+
+        {release_data, Request} ->
+            ?LOG("Someone asked me to release some data"),
+            {Dataname, Pid} = Request,
+            case dict:find(Dataname, DataDict) of
+                error -> Pid ! not_found;
+                {ok, Value} -> Pid ! {data, Value}
+            end,
+            storage_run(dict:erase(Dataname,DataDict));
 
         {kill} ->
             ?LOG("Someone asked me to commit suicide!");
 
-        _ -> io:fwrite("Received something unusual")
+        _ -> ?LOG("Received something unusual"),
+             storage_run(DataDict)
 
     end. %end receive
 
 store_simple(DataDict, Dataname, Data) ->
     ?LOG({"store data ", Dataname, ". Mode = simple"}),
-    DataDict = dict:append(Dataname,Data,DataDict).
+    case dict:find(Dataname, DataDict) of
+        error -> dict:append(Dataname,Data,DataDict);
+        {ok, Value} -> DataDict % avoid duplicates
+    end.
 
 store_distributed(DataDict, Dataname, Data) ->
-    ?LOG({"store data ", Dataname, ". Mode = distributed"}).
+    ?LOG({"store data ", Dataname, ". Mode = distributed"}),
+    case dict:find(Dataname, DataDict) of
+        error -> dict:append(Dataname,Data,DataDict);
+        {ok, Value} -> DataDict % avoid duplicates
+    end.
 
 store_critical(DataDict, Dataname, Data) ->
-    ?LOG({"store data ", Dataname, ". Mode = critical"}).
+    ?LOG({"store data ", Dataname, ". Mode = critical"}),
+    case dict:find(Dataname, DataDict) of
+        error -> dict:append(Dataname,Data,DataDict);
+        {ok, Value} -> DataDict % avoid duplicates
+    end.

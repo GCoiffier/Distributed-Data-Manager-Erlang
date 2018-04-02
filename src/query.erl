@@ -1,16 +1,16 @@
 -module(query).
-
--define(debug,true).
-
+%% -----------------------------------------------------------------------------
+-import(storage, [storage_init/0]).
 %% ----------------------------------------------------------------------------
--export([run/0]).
-
+-export([query_init/0]).
 %% ----------------------------------------------------------------------------
--ifdef(debug).
+-define(DEBUG,true).
+-ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
 -define(LOG(X), true).
 -endif.
 %% ----------------------------------------------------------------------------
 
-run() -> ok.
+query_init() -> ?LOG("Query node init"),
+                storage_init().
