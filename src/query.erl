@@ -6,7 +6,7 @@
 %% ----------------------------------------------------------------------------
 -define(DEBUG,true).
 -ifdef(DEBUG).
--define(LOG(X), io:format("<Module ~p, Line~p> : ~p~n", [?MODULE,?LINE,X])).
+-define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
 -define(LOG(X), true).
 -endif.

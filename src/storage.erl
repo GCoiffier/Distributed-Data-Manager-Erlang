@@ -14,11 +14,11 @@
 
 
 storage_init() ->
-    DataDict = dict:new(),
-    storage_run(DataDict).
+    storage_run(dict:new()).
 
 storage_run(DataDict) ->
     receive
+
         {are_you_alive, Pid} ->
             ?LOG("Someone asked me if I was alive!"),
 
@@ -82,19 +82,19 @@ store_simple(DataDict, Dataname, Data) ->
     ?LOG({"store data ", Dataname, ". Mode = simple"}),
     case dict:find(Dataname, DataDict) of
         error -> dict:append(Dataname,Data,DataDict);
-        {ok, Value} -> DataDict % avoid duplicates
+        {ok, _} -> DataDict % avoid duplicates
     end.
 
 store_distributed(DataDict, Dataname, Data) ->
     ?LOG({"store data ", Dataname, ". Mode = distributed"}),
     case dict:find(Dataname, DataDict) of
         error -> dict:append(Dataname,Data,DataDict);
-        {ok, Value} -> DataDict % avoid duplicates
+        {ok, _} -> DataDict % avoid duplicates
     end.
 
 store_critical(DataDict, Dataname, Data) ->
     ?LOG({"store data ", Dataname, ". Mode = critical"}),
     case dict:find(Dataname, DataDict) of
         error -> dict:append(Dataname,Data,DataDict);
-        {ok, Value} -> DataDict % avoid duplicates
+        {ok, _} -> DataDict % avoid duplicates
     end.

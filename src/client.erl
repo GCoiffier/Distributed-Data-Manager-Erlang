@@ -2,12 +2,12 @@
 
 %% -----------------------------------------------------------------------------
 -import(server, [server_init/0]).
+-import(utilities, [store/0]).
 %% -----------------------------------------------------------------------------
--export([main/0]).
+-export([init/0, connect/0]).
 -export([send_data/2, fetch_data/1, release_data/1]).
 -export([broadcast/1]).
 -export([compile/2, send_code/2]).
-
 %% -----------------------------------------------------------------------------
 -define(TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
@@ -20,30 +20,30 @@
 -endif.
 
 %% -----------------------------------------------------------------------------
--on_load(main/0).
 
-main() ->
-    % Main function
+init() ->
     io:fwrite("Initializing~n"),
 
+    compile:file(utilities),
     compile:file(server),
     compile:file(query),
     compile:file(storage),
 
     % create a subprocess whose goal is to store the nodes' ID we have access to
-    NPid = spawn(?MODULE, store_neighbours, [sets:new()]),
-    register(links, NPid),
+    NPid = spawn_link(utilities, store, []),
+    register(neighbours, NPid),
 
     ManagerPid = spawn(server, server_init, []),
     ManagerPid ! {are_you_done, self()},
 
     receive {init_done, L} ->
-        io:fwrite("Spawning successful. Keeping a trace of the created nodes~n"),
-        links ! {add_list, L}
+        io:fwrite("Spawning successful~n"),
+        neighbours ! {add_list, L}
     after ?TIMEOUT_TIME ->
         io:fwrite("Time out~n")
     end.
 
+connect() -> ok.
 
 send_data(Filename,Status) ->
     %%
@@ -85,7 +85,6 @@ fetch_data(Filename) ->
     % test ! {fetch_data, {Filename, self()}},
 
     receive
-
         not_found ->
             io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
 
@@ -103,7 +102,7 @@ release_data(Filename) ->
     % Retrieve data Filename and supresses it from the network
     % If the Data couldn't be found, does nothing
     %%
-    test ! {release_data, {Filename, self()}},
+    % test ! {release_data, {Filename, self()}},
     receive
         not_found ->
             io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
@@ -118,28 +117,16 @@ release_data(Filename) ->
     end.
 
 
-
-broadcast(Message) -> ?LOG(Message), ok.
-
-% ------------------------------ Utilities -------------------------------------
-
-store_neighbours(S) ->
-    receive
-        {get, Pid} -> Pid ! sets:to_list(S),
-                      store_neighbours(S);
-
-        {add, X} -> store_neighbours(sets:add_element(X,S));
-
-        {add_list, L} -> ?LOG("add list"),
-                         NewSet = lists:foldl(fun(X,Set) -> sets:add_element(X,Set) end, S, L),
-                         store_neighbours(NewSet);
-
-        {del, X} -> store_neighbours(sets:del_element(X,S));
-
-        {kill} -> ok
-    end.
+broadcast(What) -> lists:map(fun(Pid) -> Pid ! What end, get_neighbours()).
 
 % ------------------------------------------------------------------------------
+
+get_neighbours() ->
+    neighbours ! {get, self()},
+    receive {reply, L} -> L
+    after ?TIMEOUT_TIME ->
+        io:fwrite("The node seems to be disconnected"), []
+    end.
 
 % Reads the content of a txt file and convert it to a list of strings
 readfile(Filename) ->
