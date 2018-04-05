@@ -23,7 +23,6 @@ query_init(N) ->
     end.
 
 query_init(N, 0, Children, Neighbours) ->
-    io:fwrite("~p : ~p~n", [N,Children]),
     lists:map(fun (Pid) -> Pid ! {new_father,self()} end, sets:to_list(Children)),
     query_run(Children, Neighbours);
 
@@ -34,6 +33,7 @@ query_init(N, M, Children, Neighbours) ->
 query_run(Children, Neighbours) ->
     receive
         {ping, Pid} ->
+            io:fwrite("Ping received !~n"),
             Pid ! pong,
             query_run(Children, Neighbours);
 
@@ -77,6 +77,6 @@ query_run(Children, Neighbours) ->
     end.
 
 % ------------------- Utility function working on data -------------------------
-split_data(Data) -> Data.
+%split_data(Data) -> Data.
 
-merge_data(DataList) -> DataList.
+%merge_data(DataList) -> DataList.

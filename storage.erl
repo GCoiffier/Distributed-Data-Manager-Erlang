@@ -14,7 +14,6 @@
 
 
 storage_init() ->
-    ?LOG("Storage node init"),
     storage_run(dict:new(), sets:new()).
 
 storage_run(DataDict,Fathers) ->

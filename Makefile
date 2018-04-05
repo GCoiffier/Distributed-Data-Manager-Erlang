@@ -1,12 +1,13 @@
-NAME = NONE
-COOKIE = "toto"
+NAME = guigui
+COOKIE = toto
 PHONY : all
 
 client :
-	erl -name $NAME -setcookie $COOKIE
+	erl # -name $NAME -setcookie $COOKIE
 
-all : client
+all : clean client
 
 clean :
 	rm -f *.beam
 	rm -f src/*.beam
+	rm -f *.dump

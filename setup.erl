@@ -19,6 +19,7 @@ server_init() -> server_init(?NB_QUERY_NODE, sets:new()).
     % Spawns N=10 query nodes and connect them together.
 
 server_init(0, QueryNodeSet) ->
+    lists:map(fun (Pid) -> Pid ! {other_query_nodes, QueryNodeSet} end, sets:to_list(QueryNodeSet)),
     receive {are_you_done, Pid} ->
         Pid ! {init_done, QueryNodeSet}
     end;

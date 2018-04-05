@@ -37,8 +37,7 @@ init() ->
 
     receive {init_done, S} ->
         io:fwrite("Spawning successful~n"),
-        neighbours ! {add_list, sets:to_list(S)},
-        ?LOG({"voisins :", S})
+        neighbours ! {add_list, sets:to_list(S)}
     after ?TIMEOUT_TIME ->
         io:fwrite("Time out~n")
     end.
@@ -125,7 +124,7 @@ get_neighbours() ->
     neighbours ! {get, self()},
     receive {reply, L} -> L
     after ?TIMEOUT_TIME ->
-        io:fwrite("The node seems to be disconnected"), []
+        io:fwrite("in get_neighbours() : the node seems to be disconnected"), []
     end.
 
 % Reads the content of a txt file and convert it to a list of strings
