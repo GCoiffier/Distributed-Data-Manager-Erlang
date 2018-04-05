@@ -7,8 +7,14 @@ store() -> store(sets:new()).
 
 store(S) ->
     receive
-        {get, Pid} -> Pid ! {reply, sets:to_list(S)},
-                      store(S);
+        {get, Pid} ->
+            Pid ! {reply, sets:to_list(S)},
+            store(S);
+
+        {get_one, Pid} ->
+            [H|_] = sets:to_list(S),
+            Pid ! {reply, H},
+            store(S);
 
         {add, X} -> store(sets:add_element(X,S));
 

@@ -1,13 +1,12 @@
 -module(client).
 
 %% -----------------------------------------------------------------------------
--import(server, [server_init/0]).
+-import(setup, [server_init/0]).
 -import(utilities, [store/0]).
 %% -----------------------------------------------------------------------------
 -export([init/0, connect/0]).
 -export([send_data/2, fetch_data/1, release_data/1]).
 -export([broadcast/1]).
--export([compile/2, send_code/2]).
 %% -----------------------------------------------------------------------------
 -define(TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
@@ -25,7 +24,7 @@ init() ->
     io:fwrite("Initializing~n"),
 
     compile:file(utilities),
-    compile:file(server),
+    compile:file(setup),
     compile:file(query),
     compile:file(storage),
 
@@ -33,12 +32,13 @@ init() ->
     NPid = spawn_link(utilities, store, []),
     register(neighbours, NPid),
 
-    ManagerPid = spawn(server, server_init, []),
+    ManagerPid = spawn(setup, server_init, []),
     ManagerPid ! {are_you_done, self()},
 
-    receive {init_done, L} ->
+    receive {init_done, S} ->
         io:fwrite("Spawning successful~n"),
-        neighbours ! {add_list, L}
+        neighbours ! {add_list, sets:to_list(S)},
+        ?LOG({"voisins :", S})
     after ?TIMEOUT_TIME ->
         io:fwrite("Time out~n")
     end.
@@ -139,9 +139,3 @@ readfile(Filename) ->
 writefile(Filename,File) ->
     file:write_file(string:concat("../output/", Filename), io_lib:fwrite("~s", [File])),
     io:fwrite("Data successfully retrieved and stored in output/~p", [Filename]).
-
-compile(ID, Filename) -> spawn(ID, compile, file, [Filename]).
-
-% sends a code
-send_code(ID, Module) -> {Mod, Bin, File} = code:get_object_code(Module),
-                        spawn(ID, code, load_binary, [Mod, File, Bin]).
