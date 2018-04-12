@@ -1,3 +1,8 @@
 *.beam
 src/*.beam
 output/*
+report/*.toc
+report/*.aux
+report/*.log
+report/*.out
+report/*.gz
