@@ -62,10 +62,11 @@ storage_run(DataDict,Fathers) ->
     after 5000 ->
         case sets:size(Fathers) of
             0 -> io:fwrite("Storage node ~p is disconnected from the network. Shutting down~n", [self()]);
-            x when x<3 -> io:fwrite("Not enough Father for me ! ~p", [self()]);
-            _ -> ok
+            x when x<3 -> io:fwrite("Not enough fathers for me ! ~p", [self()]);
+            _ -> true
         end,
         storage_run(DataDict,Fathers)
+
     end. %end receive
 
 append(DataDict, Dataname, Data) ->

@@ -15,9 +15,7 @@
 %% ----------------------------------------------------------------------------
 
 query_init(N) ->
-    ?LOG("Query node init"),
-    MyName = list_to_atom("query_node_" ++ integer_to_list(N)),
-    register(MyName,self()),
+    ?LOG({"Query node init", N}),
     receive
         {other_query_nodes, QueryNodes} -> query_init(N, ?NB_STORAGE_NODE, sets:new(), sets:del_element(self(), QueryNodes))
     end.
@@ -33,7 +31,7 @@ query_init(N, M, Children, Neighbours) ->
 query_run(Children, Neighbours) ->
     receive
         {ping, Pid} ->
-            io:fwrite("Ping received !~n"),
+            ?LOG("Ping received !"),
             Pid ! pong,
             query_run(Children, Neighbours);
 
@@ -77,6 +75,6 @@ query_run(Children, Neighbours) ->
     end.
 
 % ------------------- Utility function working on data -------------------------
-%split_data(Data) -> Data.
+split_data(Data) -> Data.
 
-%merge_data(DataList) -> DataList.
+merge_data(DataList) -> DataList.

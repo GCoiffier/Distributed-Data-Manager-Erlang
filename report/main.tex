@@ -1,0 +1,46 @@
+\documentclass[a4paper]{report}
+
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{pdflscape}
+\usepackage{xspace}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{multicol}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=3cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage[section]{placeins}
+
+\titleformat{\chapter}%
+  {\normalfont\bfseries\Huge}{\thechapter.}{10pt}{}
+\newpagestyle{mystyle}{
+  \sethead[][\thechapter.\enspace\chaptertitle][]{}{\thesection~\sectiontitle}{}
+\setfoot{}{\thepage}{}}
+
+\title{\Huge\bfseries Système distribués \\ Distributed Data manager \\~\\ \Large Rapport de projet}
+
+\author{Guillaume Coiffier \\ \href{mailto:guillaume.coiffier@ens-lyon.fr}{guillaume.coiffier@ens-lyon.fr}}
+
+\date{Avril 2018}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\chapter{Foo}
+\chapter{Bar}
+\end{document}

@@ -15,18 +15,29 @@
 -define(NB_QUERY_NODE,10).
 %% -----------------------------------------------------------------------------
 
-server_init() -> server_init(?NB_QUERY_NODE, sets:new()).
-    % Spawns N=10 query nodes and connect them together.
+-on_load(server_init/0).
+
+% Spawns N=10 query nodes and connect them together.
+server_init() ->
+    io:fwrite("Initializing~n"),
+    compile:file(query),
+    compile:file(storage),
+    server_init(?NB_QUERY_NODE, sets:new()).
 
 server_init(0, QueryNodeSet) ->
     lists:map(fun (Pid) -> Pid ! {other_query_nodes, QueryNodeSet} end, sets:to_list(QueryNodeSet)),
-    receive {are_you_done, Pid} ->
-        Pid ! {init_done, QueryNodeSet}
-    end;
+    server_run(QueryNodeSet).
 
 server_init(N, QueryNodeSet) ->
     Pid = spawn(query, query_init, [N]),
     server_init(N-1, sets:add_element(Pid, QueryNodeSet)).
+
+server_run(QueryNodeSet) ->
+    receive
+        {connect_request, Pid} ->
+            Pid ! {reply, QueryNodeSet},
+            server_run(QueryNodeSet)
+    end.
 
 compile(ID, Filename) -> spawn(ID, compile, file, [Filename]).
 

@@ -1,10 +1,7 @@
 -module(client).
 
 %% -----------------------------------------------------------------------------
--import(setup, [server_init/0]).
--import(utilities, [store/0]).
-%% -----------------------------------------------------------------------------
--export([init/0, connect/0]).
+-export([connect/1]).
 -export([send_data/2, fetch_data/1, release_data/1]).
 -export([broadcast/1]).
 %% -----------------------------------------------------------------------------
@@ -20,29 +17,15 @@
 
 %% -----------------------------------------------------------------------------
 
-init() ->
-    io:fwrite("Initializing~n"),
-
-    compile:file(utilities),
-    compile:file(setup),
-    compile:file(query),
-    compile:file(storage),
-
-    % create a subprocess whose goal is to store the nodes' ID we have access to
-    NPid = spawn_link(utilities, store, []),
-    register(neighbours, NPid),
-
-    ManagerPid = spawn(setup, server_init, []),
-    ManagerPid ! {are_you_done, self()},
-
-    receive {init_done, S} ->
-        io:fwrite("Spawning successful~n"),
-        neighbours ! {add_list, sets:to_list(S)}
+connect(Node) ->
+    {neighbours, Node} ! {get, self()},
+    receive {reply, L} ->
+        NPid = spawn_link(utilities, store, []),
+        register(neighbours, NPid),
+        neighbours ! {add_list, L}
     after ?TIMEOUT_TIME ->
-        io:fwrite("Time out~n")
+        io:fwrite("in get_neighbours() : the node seems to be disconnected"), []
     end.
-
-connect() -> ok.
 
 send_data(Filename,Status) ->
     %%
