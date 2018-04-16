@@ -1,7 +1,7 @@
 -module(server).
 %% -----------------------------------------------------------------------------
 -import(query, [query_init/1]).
--export([server_init/0]).
+-export([server_init/0, server_run/1]).
 -export([compile/2, send_code/2]).
 
 %% -----------------------------------------------------------------------------
@@ -38,10 +38,14 @@ server_init(N, QueryNodeSet) ->
 server_run(QueryNodeSet) ->
     % Handles new connections and reply to pings
     receive
-        {ping, Pid} -> io:fwrite("Master was pinged !~n"), Pid ! pong;
+        {ping, Pid} ->
+            % ?LOG("Master was pinged !"),
+            Pid ! {pong, self()},
+            server_run(QueryNodeSet);
 
         {connect_request, Pid} ->
-            Pid ! {reply, QueryNodeSet},
+            Pid ! {reply, sets:to_list(QueryNodeSet)},
+            io:fwrite("New client connected : ~p~n", [Pid]),
             server_run(QueryNodeSet)
     end.
 

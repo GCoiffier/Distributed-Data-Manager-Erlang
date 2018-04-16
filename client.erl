@@ -5,7 +5,7 @@
 -export([send_data/2, fetch_data/1, release_data/1]).
 -export([broadcast/1, scatter/1]).
 %% -----------------------------------------------------------------------------
--define(TIMEOUT_TIME, 1000).
+-define(CLIENT_TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
 
 -define(DEBUG,true).
@@ -18,13 +18,14 @@
 %% -----------------------------------------------------------------------------
 
 connect(Node) ->
+    compile:file(utilities),
     % Retrieve set of query nodes on which we can connect
     {master, Node} ! {connect_request, self()},
     receive {reply, L} ->
         NPid = spawn_link(utilities, store, []),
         register(neighbours, NPid),
         neighbours ! {add_list, L}
-    after ?TIMEOUT_TIME ->
+    after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("Error : the client is unable to connect~n")
     end.
 
@@ -53,7 +54,7 @@ send_data(Filename,Status) ->
     receive
         ack -> io:fwrite("Success.~n");
         fail -> io:fwrite("Failed.~n")
-    after ?TIMEOUT_TIME ->
+    after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("No acknowledgment received. Assuming data sending failed.~n")
     end.
 
@@ -76,7 +77,7 @@ fetch_data(Filename) ->
             ?LOG({"Data =", Data}),
             writefile(Filename, Data)
 
-    after ?TIMEOUT_TIME ->
+    after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("No data received in time. Assuming connection failed.~n")
     end.
 
@@ -95,12 +96,12 @@ release_data(Filename) ->
             ?LOG({"Data =", Data}),
             writefile(Filename, Data)
 
-    after ?TIMEOUT_TIME ->
+    after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("No data received in time. Assuming connection failed.~n")
     end.
 
 
-broadcast(Message) -> lists:map(fun(Pid) -> Pid ! Message end, get_neighbours()).
+broadcast(Message) -> lists:map(fun(Pid) -> Pid ! Message end, get_neighbours()), ok.
 
 scatter(MessageList) -> scatter(MessageList, get_neighbours()).
 scatter([],_) -> ok;
@@ -112,7 +113,7 @@ scatter([M|Q1], [N|Q2]) -> N ! M, scatter(Q1,Q2).
 get_neighbours() ->
     neighbours ! {get, self()},
     receive {reply, L} -> L
-    after ?TIMEOUT_TIME ->
+    after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("in get_neighbours() : the node seems to be disconnected"), []
     end.
 
