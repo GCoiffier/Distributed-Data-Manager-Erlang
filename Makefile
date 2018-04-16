@@ -1,11 +1,5 @@
-NAME = guigui
-COOKIE = toto
-PHONY : all
-
-client :
-	erl # -name $NAME -setcookie $COOKIE
-
-all : clean client
+all :
+	erl
 
 clean :
 	rm -f *.beam

@@ -1,4 +1,4 @@
--module(setup).
+-module(server).
 %% -----------------------------------------------------------------------------
 -import(query, [query_init/1]).
 -export([server_init/0]).
@@ -22,18 +22,24 @@ server_init() ->
     io:fwrite("Initializing~n"),
     compile:file(query),
     compile:file(storage),
+    register(master, self()),
     server_init(?NB_QUERY_NODE, sets:new()).
 
 server_init(0, QueryNodeSet) ->
+    % End of server init. Sends their neightbours to everyone, they enter run loop
     lists:map(fun (Pid) -> Pid ! {other_query_nodes, QueryNodeSet} end, sets:to_list(QueryNodeSet)),
-    server_run(QueryNodeSet).
+    server_run(QueryNodeSet);
 
 server_init(N, QueryNodeSet) ->
-    Pid = spawn(query, query_init, [N]),
+    % spawns a query process, then recursive call.
+    Pid = spawn(query, query_init, [N,N==1]),
     server_init(N-1, sets:add_element(Pid, QueryNodeSet)).
 
 server_run(QueryNodeSet) ->
+    % Handles new connections and reply to pings
     receive
+        {ping, Pid} -> io:fwrite("Master was pinged !~n"), Pid ! pong;
+
         {connect_request, Pid} ->
             Pid ! {reply, QueryNodeSet},
             server_run(QueryNodeSet)

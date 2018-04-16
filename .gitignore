@@ -1,5 +1,5 @@
 *.beam
-src/*.beam
+*.dump
 output/*
 report/*.toc
 report/*.aux

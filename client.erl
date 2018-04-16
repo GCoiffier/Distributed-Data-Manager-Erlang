@@ -3,7 +3,7 @@
 %% -----------------------------------------------------------------------------
 -export([connect/1]).
 -export([send_data/2, fetch_data/1, release_data/1]).
--export([broadcast/1]).
+-export([broadcast/1, scatter/1]).
 %% -----------------------------------------------------------------------------
 -define(TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
@@ -18,13 +18,14 @@
 %% -----------------------------------------------------------------------------
 
 connect(Node) ->
-    {neighbours, Node} ! {get, self()},
+    % Retrieve set of query nodes on which we can connect
+    {master, Node} ! {connect_request, self()},
     receive {reply, L} ->
         NPid = spawn_link(utilities, store, []),
         register(neighbours, NPid),
         neighbours ! {add_list, L}
     after ?TIMEOUT_TIME ->
-        io:fwrite("in get_neighbours() : the node seems to be disconnected"), []
+        io:fwrite("Error : the client is unable to connect~n")
     end.
 
 send_data(Filename,Status) ->
@@ -99,7 +100,12 @@ release_data(Filename) ->
     end.
 
 
-broadcast(What) -> lists:map(fun(Pid) -> Pid ! What end, get_neighbours()).
+broadcast(Message) -> lists:map(fun(Pid) -> Pid ! Message end, get_neighbours()).
+
+scatter(MessageList) -> scatter(MessageList, get_neighbours()).
+scatter([],_) -> ok;
+scatter(L, []) -> scatter(L, get_neighbours());
+scatter([M|Q1], [N|Q2]) -> N ! M, scatter(Q1,Q2).
 
 % ------------------------------------------------------------------------------
 
