@@ -3,7 +3,7 @@
 -import(storage, [storage_init/0]).
 -import(server, [server_run/1]).
 %% ----------------------------------------------------------------------------
--export([query_init/2]).
+-export([query_init/1]).
 %% ----------------------------------------------------------------------------
 -define(DEBUG,true).
 -ifdef(DEBUG).
@@ -19,19 +19,19 @@
 -define(FREQUENCY_LEADER_CHANGE, 50).
 %% ----------------------------------------------------------------------------
 
-query_init(N, IsLeader) ->
+query_init(IsLeader) ->
     receive
-        {other_query_nodes, QueryNodes} -> query_init(N, ?NB_STORAGE_NODE, sets:new(), sets:del_element(self(), QueryNodes), IsLeader)
+        {other_query_nodes, QueryNodes} -> query_init(?NB_STORAGE_NODE, sets:new(), sets:del_element(self(), QueryNodes), IsLeader)
     end.
 
-query_init(N, 0, Children, Neighbours, IsLeader) ->
+query_init(0, Children, Neighbours, IsLeader) ->
     lists:map(fun (Pid) -> Pid ! {new_father,self()} end, sets:to_list(Children)),
-    ?LOG({"Query node init OK", N, IsLeader}),
+    ?LOG({"Query node init OK", IsLeader}),
     query_run(Children, Neighbours, IsLeader);
 
-query_init(N, M, Children, Neighbours, IsLeader) ->
+query_init(M, Children, Neighbours, IsLeader) ->
     Pid = spawn(storage, storage_init, []),
-    query_init(N, M-1, sets:add_element(Pid,Children), Neighbours, IsLeader).
+    query_init(M-1, sets:add_element(Pid,Children), Neighbours, IsLeader).
 
 query_run(Children, Neighbours, IsLeader) ->
     if IsLeader ->
@@ -85,7 +85,7 @@ query_run(Children, Neighbours, IsLeader) ->
                 critical ->
                     Pid ! ack;
                 _ ->
-                    io:fwrite("received store_data instruction with invalid status !"),
+                    ?LOG("received store_data instruction with invalid status !"),
                     Pid ! fail
             end,
             query_run(Children, Neighbours, IsLeader);

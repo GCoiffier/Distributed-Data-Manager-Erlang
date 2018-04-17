@@ -17,7 +17,9 @@
 
 -on_load(server_init/0).
 
-% Spawns N=10 query nodes and connect them together.
+% % % % %
+% Spawns N= NB_QUERY_NODE query nodes and connect them together.
+% % % % %
 server_init() ->
     io:fwrite("Initializing~n"),
     compile:file(query),
@@ -26,13 +28,13 @@ server_init() ->
     server_init(?NB_QUERY_NODE, sets:new()).
 
 server_init(0, QueryNodeSet) ->
-    % End of server init. Sends their neightbours to everyone, they enter run loop
+    % End of server init. Sends their neighbours to everyone, they enter run loop
     lists:map(fun (Pid) -> Pid ! {other_query_nodes, QueryNodeSet} end, sets:to_list(QueryNodeSet)),
     server_run(QueryNodeSet);
 
 server_init(N, QueryNodeSet) ->
     % spawns a query process, then recursive call.
-    Pid = spawn(query, query_init, [N,N==1]),
+    Pid = spawn(query, query_init, [N==1]),
     server_init(N-1, sets:add_element(Pid, QueryNodeSet)).
 
 server_run(QueryNodeSet) ->
