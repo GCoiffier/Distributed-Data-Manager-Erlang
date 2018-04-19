@@ -2,8 +2,11 @@
 
 %% -----------------------------------------------------------------------------
 -export([connect/1]).
--export([send_data/2, fetch_data/1, release_data/1]).
+-export([send_data/1, send_data/2]).
+-export([fetch_data/1, release_data/1]).
 -export([broadcast/1, scatter/1]).
+-export([get_stored/0]).
+
 %% -----------------------------------------------------------------------------
 -define(CLIENT_TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
@@ -19,6 +22,8 @@
 
 connect(Node) ->
     compile:file(utilities),
+    IPid = spawn_link(utilities, store_id, []),
+    register(id_storage, IPid),
     % Retrieve set of query nodes on which we can connect
     {master, Node} ! {connect_request, self()},
     receive {reply, L} ->
@@ -33,9 +38,10 @@ connect(Node) ->
 % % % % %
 % Reads data from Filename and send it to the network
 % Three storage mode are possible
-%     - Simple : the data is stored in one chunk in one process
-%     - Distributed : the data is cut in parts and stored in various processes
-%     - Critical : the data is copied several times and stored in whole in different processes
+%     - 'simple' : the data is stored in one chunk in one process
+%     - 'distributed' : the data is cut in parts and stored in various processes
+%     - 'critical' : the data is copied several times and stored in whole in different processes
+% If no status is provided, the default status is 'simple'
 % % % % %
 send_data(Filename,Status) ->
     case Status of
@@ -48,18 +54,32 @@ send_data(Filename,Status) ->
 
     Path = string:concat("data/",Filename),
 
-    Data = readfile(Path),
-    ?LOG({"Data to be sent :", Data}),
+    case readfile(Path) of
+        error -> io:fwrite("Couldn't read input file~n");
 
-    L = get_neighbours(),
-    To = lists:nth(random:uniform(length(L))-1, L),
-    To ! {store_data, {Filename, Data, Status, self()}},
-    receive
-        ack -> io:fwrite("Send successful~n");
-        fail -> io:fwrite("Send Failed~n")
-    after ?CLIENT_TIMEOUT_TIME ->
-        io:fwrite("No acknowledgment received. Assuming data sending failed.~n")
+        {DataSize, Data} ->
+            ?LOG({"Data to be sent :", Data}),
+            io:fwrite("Sending ~p bytes of data on the network~n", [DataSize]),
+
+            % send request to a random query node of the network
+            L = get_neighbours(),
+            To = lists:nth(random:uniform(length(L))-1, L),
+            To ! {store_data, {Filename, DataSize, Data, Status, self()}},
+
+            receive
+                {ack, DataInfo} ->
+                    io:fwrite("Send successful~n"),
+                    ?LOG({"After send, retrived", DataInfo}),
+                    id_storage ! {add, Filename, DataInfo};
+
+                fail -> io:fwrite("Send Failed~n")
+
+            after ?CLIENT_TIMEOUT_TIME ->
+                io:fwrite("No acknowledgment received. Assuming data sending failed.~n")
+            end
     end.
+
+send_data(Filename) -> send_data(Filename,simple).
 
 % % % % %
 % Retrieve data Filename from the network.
@@ -114,6 +134,13 @@ scatter([M|Q1], [N|Q2]) -> N ! M, scatter(Q1,Q2).
 
 % ------------------------------------------------------------------------------
 
+get_stored() ->
+    id_storage ! {get_stored, self()},
+    receive {reply, L} -> L
+    after ?CLIENT_TIMEOUT_TIME ->
+        io:fwrite("in get_stored() : the node seems to be disconnected"), []
+    end.
+
 get_neighbours() ->
     neighbours ! {get, self()},
     receive {reply, L} -> L
@@ -124,10 +151,15 @@ get_neighbours() ->
 % Reads the content of a txt file and convert it to a list of strings
 readfile(Filename) ->
     ?LOG({"reading lines from file ", Filename}),
-    {ok, Data} = file:read_file(Filename),
-    binary:split(Data, [<<"\n">>], [global]),
-    ?LOG("Reading Done."),
-    binary:bin_to_list(Data).
+    case file:read_file(Filename) of
+        {ok, Data} ->
+            binary:split(Data, [<<"\n">>], [global]),
+            ?LOG("Reading Done."),
+            {byte_size(Data), binary:bin_to_list(Data)};
+        {error, Reason} ->
+            io:fwrite("Error in readfile : ~p~n", [Reason]),
+            error
+    end.
 
 writefile(Filename,File) ->
     file:write_file(string:concat("/output/", Filename), io_lib:fwrite("~s", [File])),

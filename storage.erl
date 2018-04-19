@@ -10,6 +10,8 @@
 -else.
 -define(LOG(X), true).
 -endif.
+
+-define(STORAGE_UPDATE_TIME,5000).
 %% ----------------------------------------------------------------------------
 
 
@@ -31,8 +33,8 @@ storage_run(DataDict,Fathers) ->
             ?LOG("Someone asked me to store datas!"),
             ?LOG({"What I received :", Request}),
 
-            {Dataname, Data, Pid} = Request,
-            storage_run(append(DataDict, Dataname, Data),Fathers);
+            {Dataname, DataID, Data} = Request,
+            storage_run(dict:append(DataDict, {Dataname, DataID}, Data), Fathers);
 
         {fetch_data, Request} ->
             ?LOG("Someone asked me to give him data!"),
@@ -56,16 +58,8 @@ storage_run(DataDict,Fathers) ->
             ?LOG("Someone asked me to commit suicide!"),
             lists:map(fun (Pid) -> Pid ! {kill_child, self()} end, sets:to_list(Fathers));
 
-        _ -> ?LOG("Received something unusual"),
+        X -> ?LOG({"Received something unusual :", X}),
              storage_run(DataDict,Fathers)
-
-    after 5000 ->
-        case sets:size(Fathers) of
-            0 -> io:fwrite("Storage node ~p is disconnected from the network. Shutting down~n", [self()]);
-            x when x<3 -> io:fwrite("Not enough fathers for me ! ~p", [self()]);
-            _ -> true
-        end,
-        storage_run(DataDict,Fathers)
 
     end. %end receive
 
