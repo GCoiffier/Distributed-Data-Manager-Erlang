@@ -34,12 +34,13 @@ storage_run(DataDict,Fathers) ->
             ?LOG({"What I received :", Request}),
 
             {Dataname, DataID, Data} = Request,
-            storage_run(dict:append(DataDict, {Dataname, DataID}, Data), Fathers);
+            storage_run(dict:append({Dataname, DataID}, Data, DataDict), Fathers);
 
         {fetch_data, Request} ->
             ?LOG("Someone asked me to give him data!"),
-            {Dataname, Pid} = Request,
-            case dict:find(Dataname, DataDict) of
+            {Dataname, UUID, Pid} = Request,
+            Key = {Dataname, UUID},
+            case dict:find(Key, DataDict) of
                 error -> Pid ! not_found;
                 {ok, Value} -> Pid ! {data, Value}
             end,
@@ -47,12 +48,13 @@ storage_run(DataDict,Fathers) ->
 
         {release_data, Request} ->
             ?LOG("Someone asked me to release some data"),
-            {Dataname, Pid} = Request,
+            {Dataname, UUID, Pid} = Request,
+            Key = {Dataname, UUID},
             case dict:find(Dataname, DataDict) of
                 error -> Pid ! not_found;
                 {ok, Value} -> Pid ! {data, Value}
             end,
-            storage_run(dict:erase(Dataname,DataDict),Fathers);
+            storage_run(dict:erase(Key,DataDict),Fathers);
 
         {kill} ->
             ?LOG("Someone asked me to commit suicide!"),

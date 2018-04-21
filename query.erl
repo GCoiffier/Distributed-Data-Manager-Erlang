@@ -18,6 +18,7 @@
 -define(MASTER_TIMEOUT_TIME, 1000).
 -define(FREQUENCY_MASTER_CHECK, 5).
 -define(FREQUENCY_LEADER_CHANGE, 50).
+-define(QUERY_TIMEOUT_TIME, 1000).
 %% ----------------------------------------------------------------------------
 
 query_init(IsLeader) ->
@@ -92,12 +93,24 @@ query_run(Children, Neighbours, IsLeader) ->
             end,
             query_run(UpdatedChildren, Neighbours, IsLeader);
 
-        {fetch_data, Request} ->
-            {Dataname, Pid} = Request,
+        {get_client, Type, Request} -> % message received from a client
+            {DataInfo, ClientPid} = Request,
+            NeighbourAnswer = lists:map( fun (X) -> X ! {get_query, Type, DataInfo, self()},
+                                         receive R -> R
+                                         after ?QUERY_TIMEOUT_TIME -> no_response
+                                         end,
+                                         sets:to_list(Neighbours)),
+            Answers = [find_among_children(Type,DataInfo,Children) | NeighbourAnswer],
+            case Type of
+                simple ->
+                distributed -> todo;
+                critical -> todo;
+                _ -> ?LOG("received get_data instruction with invalid status !")
+            end,
             query_run(Children, Neighbours, IsLeader);
 
-        {release_data, Request} ->
-            {Dataname, Pid} = Request,
+        {get_query, Type, DataInfo, QueryPid} -> % message received from another query node
+            QueryPid ! {reply, find_among_children(Type, DataInfo, Children)},
             query_run(Children, Neighbours, IsLeader);
 
         % -- default case --
@@ -110,26 +123,34 @@ query_run(Children, Neighbours, IsLeader) ->
 
 % ------------------- Storage calls functions  -------------------------
 
-store_data_simple(Children, Dataname, DataSize, Data, Pid) ->
+store_data_simple(Children, Dataname, DataSize, Data, ClientPid) ->
     case find_min_load(Children) of
         full ->
-            Pid ! fail,
+            ClientPid ! fail,
             Children;
 
         Node ->
-            Node ! {store_data, {Dataname, 0, Data}},
+            UUID = get_uuid(),
+            Node ! {store_data, {Dataname, UUID, Data}},
+            ClientPid ! {ack, {simple, Dataname, UUID}},
             UpdatedChildren =  maps:update(Node, fun (Old) -> Old+DataSize end, Children),
-            Pid ! {ack, {Dataname, Node}},
             UpdatedChildren
     end.
 
-store_data_distributed(Children,Dataname, DataSize, Data, Pid) ->
-    Pid ! {ack, {self()}},
+store_data_distributed(Children,Dataname, DataSize, Data, ClientPid) ->
+    ClientPid ! {ack, {distributed, Dataname, UUID}},
     Children.
 
-store_data_critical(Children,Dataname, DataSize, Data, Pid) ->
-    Pid ! {ack, {self()}},
+store_data_critical(Children, Dataname, DataSize, Data, ClientPid) ->
+    ClientPid ! {ack, {critical, Dataname, UUID}},
     Children.
+
+
+find_among_children(DataInfo, Children) ->
+    Results = lists:map(fun (X) ->
+                            X ! {}
+
+                maps:keys(Children)),
 
 
 % ------------------- Utility function working on data -------------------------
@@ -153,6 +174,13 @@ find_min_load(Children) ->
         ?MAX_STORAGE_CAPACITY -> full;
         _ -> Node
     end.
+
+% % % % % %
+% Returns a unique (with high probability) identifier
+% % % % % %
+get_uuid() ->
+    {{A,B,C},{D,E,F}} = calendar:universal_time(),
+    {A,B,C,D,E,F, random:uniform(1000000000)}.
 
 check_master(NodeSet) ->
     try

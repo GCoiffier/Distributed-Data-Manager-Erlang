@@ -1,8 +1,6 @@
 *.beam
 *.dump
 output/*
-report/*.toc
-report/*.aux
-report/*.log
-report/*.out
-report/*.gz
+report/*
+!report/*.pdf
+!report/*.tex

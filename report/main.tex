@@ -1,7 +1,7 @@
 \documentclass[a4paper]{report}
 
 %% Language and font encodings
-\usepackage[english]{babel}
+\usepackage[french]{babel}
 \usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{pdflscape}
@@ -30,24 +30,83 @@
   \sethead[][\thechapter.\enspace\chaptertitle][]{}{\thesection~\sectiontitle}{}
 \setfoot{}{\thepage}{}}
 
-\title{\Huge\bfseries Système distribués \\ Distributed Data manager \\~\\ \Large Rapport de projet}
-
-\author{Guillaume Coiffier \\ \href{mailto:guillaume.coiffier@ens-lyon.fr}{guillaume.coiffier@ens-lyon.fr}}
-
-\date{Avril 2018}
-
 \begin{document}
 
-\maketitle
+\begin{titlepage}
+\begin{center}
+ {\Huge \bfseries Système de gestion de données distribué\\}
+ \vspace{1cm}
+ {\Large \bfseries Rapport de projet \\}
+ % ----------------------------------------------------------------
+ \vspace{2cm}
+ {\Large Cours de systèmes distribués \\ M1 Informatique Fondamentale \\ ENS de Lyon \\ Printemps 2018 \\}
+
+ \vspace{2cm}
+
+{\Large \urlstyle{same} \color{black}
+	\href{mailto:guillaume.coiffier@ens-lyon.fr}{guillaume.coiffier@ens-lyon.fr}\\
+}
+
+\vspace{10cm}
+L'intégralité du code source est disponible à l'adresse suivante : \\
+\url{https://github.com/GCoiffier/Distributed-Data-Manager-Erlang}
+
+\vfill
+
+\end{center}
+\end{titlepage}
+
+
 \tableofcontents
 
 \chapter{Description du programme}
+\label{chap:description}
 
 \section{Topologie du réseau}
 
-\section{Plusieurs formes de stockage}
+Nous avons fait le choix d'imposer une topologie précise à notre réseau, plutôt que de gérer une topologie arbitraire.
+Les conséquences de ce choix sont discutées en chapitre \ref{chap:discussion}. \\
+On distinguera, dans le réseau, trois types d'agents :
+\begin{itemize}
+\item Le noeud \textbf{master}, responsable des connections entrantes au réseau.
+\item Les noeuds de requête (\textbf{query}), responsables de la gestion des
+requêtes de stockage et d'accès aux données.
+\item Les noeuds de stockage (\textbf{storage}) responsables... du stockage des données.
+\end{itemize}
 
-\chapter{How to use}
+Le noeud \textbf{master} est relié à l'intégralité des noeuds \textbf{query}. Ces derniers
+forment une clique. Dans la pratique, ils ont simplement accès à la liste des Pid de tous les autres noeuds query. \
+Enfin, les noeuds de stockages sont reliés à un ou plusieurs noeuds \textbf{query} et forment leurs fils.
 
+\section{Initialisation du serveur}
+
+Le noeud master (module \texttt{server.erl}) est responsable de l'Initialisation du serveur. Il est lancé lorsque l'on
+compile le module \texttt{server}. Il a la tâche d'initialiser N noeuds de requêtes, qui vont à leur tour initialiser M noeuds de stockage chacun. \\
+Les valeurs par défaut de N et M sont respectivement 10 et 5.
+
+\section{Méthode de stockage}
+Le stockage des données est assuré par un
+
+\chapter{Fonctionnement du programme}
+\label{chap:fonctionnement}
+
+\section{Interface client}
+
+L'interface du client est décrite par le module \texttt{client.erl}. Elle comprend les fonctions suivantes :
+\begin{itemize}
+    \item \texttt{connect/1}
+    \item \texttt{send\_data/2}
+    \item \texttt{fetch\_data/}
+    \item \texttt{release\_data}
+\end{itemize}
+
+\section{Gestion des requêtes d'un client par les noeuds de requête}
+
+\chapter{Discussion sur les performances et la robustesse de la solution choisie}
+\label{chap:discussion}
+
+\section{Robustesse du réseau}
+
+\section{Complexité de communication}
 
 \end{document}

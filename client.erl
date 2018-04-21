@@ -62,9 +62,7 @@ send_data(Filename,Status) ->
             io:fwrite("Sending ~p bytes of data on the network~n", [DataSize]),
 
             % send request to a random query node of the network
-            L = get_neighbours(),
-            To = lists:nth(random:uniform(length(L))-1, L),
-            To ! {store_data, {Filename, DataSize, Data, Status, self()}},
+            get_random_node() ! {store_data, {Filename, DataSize, Data, Status, self()}},
 
             receive
                 {ack, DataInfo} ->
@@ -86,38 +84,13 @@ send_data(Filename) -> send_data(Filename,simple).
 % If the Data couldn't be found, does nothing and write an
 %   error message in console
 % % % % %
-fetch_data(Filename) ->
-    receive
-        not_found ->
-            io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
-
-        {data,Value} ->
-            [Data | _ ] = Value,
-            ?LOG({"Data =", Data}),
-            writefile(Filename, Data)
-
-    after ?CLIENT_TIMEOUT_TIME ->
-        io:fwrite("No data received in time. Assuming connection failed.~n")
-    end.
-
+fetch_data(Filename) -> retrieve_data(Filename, fetch_data).
 
 % % % % %
 % Retrieve data Filename and supresses it from the network
 % If the Data couldn't be found, does nothing
 % % % % %
-release_data(Filename) ->
-    receive
-        not_found ->
-            io:fwrite("Data ~p does not seem to be stored in the network.~n", [Filename]);
-
-        {data,Value} ->
-            [Data | _ ] = Value,
-            ?LOG({"Data =", Data}),
-            writefile(Filename, Data)
-
-    after ?CLIENT_TIMEOUT_TIME ->
-        io:fwrite("No data received in time. Assuming connection failed.~n")
-    end.
+release_data(Filename) -> retrieve_data(Filename, release_data).
 
 % % % % %
 % Sends a message to every query node of the server
@@ -132,7 +105,30 @@ scatter([],_) -> ok;
 scatter(L, []) -> scatter(L, get_neighbours());
 scatter([M|Q1], [N|Q2]) -> N ! M, scatter(Q1,Q2).
 
-% ------------------------------------------------------------------------------
+% ------------------------- Non exported com functions -------------------------
+
+% Type = (fetch_data | release_data)
+retrieve_data(Filename, Type) ->
+    id_storage ! {get, Filename, self()},
+    receive
+        {reply, DataInfo} ->
+            get_random_node() ! {get_client, Type, {DataInfo, self()}},
+            receive
+                {data, Data} ->
+                    io:fwrite("Data ~p successfully retrieved from the network"),
+                    writefile(Filename, Data);
+
+                not_found -> io:fwrite("Data ~p does not seem to be stored in the network ~n")
+            end;
+
+        not_found ->
+            io:fwrite("Error : no information about ~p being stored in the network ~n", [Filename])
+
+    after ?CLIENT_TIMEOUT_TIME ->
+        io:fwrite("Error : client seems disconnected from its dictionnary ~n")
+    end.
+
+% ------------------------- Utility functions -----------------------------------
 
 get_stored() ->
     id_storage ! {get_stored, self()},
@@ -148,7 +144,15 @@ get_neighbours() ->
         io:fwrite("in get_neighbours() : the node seems to be disconnected"), []
     end.
 
-% Reads the content of a txt file and convert it to a list of strings
+get_random_node() ->
+    L = get_neighbours(),
+    lists:nth(random:uniform(length(L))-1, L).
+
+% ------------------- Utility function working on data -------------------------
+
+% % % % %
+% Reads the content of a file and convert it to a list of strings
+% % % % %
 readfile(Filename) ->
     ?LOG({"reading lines from file ", Filename}),
     case file:read_file(Filename) of
@@ -161,6 +165,9 @@ readfile(Filename) ->
             error
     end.
 
+% % % % %
+% Writes back the content of a file
+% % % % %
 writefile(Filename,File) ->
     file:write_file(string:concat("/output/", Filename), io_lib:fwrite("~s", [File])),
     io:fwrite("Data successfully retrieved and stored in output/~p", [Filename]).
