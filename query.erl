@@ -18,7 +18,7 @@
 -define(MASTER_TIMEOUT_TIME, 1000).
 -define(FREQUENCY_MASTER_CHECK, 5).
 -define(FREQUENCY_LEADER_CHANGE, 50).
--define(QUERY_TIMEOUT_TIME, 1000).
+-define(QUERY_TIMEOUT_TIME, 100).
 %% ----------------------------------------------------------------------------
 
 query_init(IsLeader) ->
@@ -94,27 +94,31 @@ query_run(Children, Neighbours, IsLeader) ->
             query_run(UpdatedChildren, Neighbours, IsLeader);
 
         {get_client, Type, Request} -> % message received from a client
+            % Type = (fetch_data | release_data) , important only for storage nodes
             {DataInfo, ClientPid} = Request,
-            NeighbourAnswer = lists:map( fun (X) -> X ! {get_query, Type, DataInfo, self()},
-                                         receive R -> R
-                                         after ?QUERY_TIMEOUT_TIME -> no_response
+            {StorageType, _, _} = DataInfo,
+            NeighbourAnswer = lists:map( fun (X) ->
+                                            X ! {get_query, Type, DataInfo, self()},
+                                            receive R -> R
+                                            after ?QUERY_TIMEOUT_TIME -> no_response
+                                            end
                                          end,
                                          sets:to_list(Neighbours)),
-            Answers = [find_among_children(Type,DataInfo,Children) | NeighbourAnswer],
-            case Type of
-                simple ->
-                distributed -> todo;
-                critical -> todo;
+            Answers = lists:flatten([find_among_children(Type,DataInfo,Children) | NeighbourAnswer]),
+            case StorageType of
+                simple -> send_data_back_simple(ClientPid, Answers);
+                distributed -> send_data_back_distributed(ClientPid, Answers);
+                critical -> send_data_back_critical(ClientPid, Answers);
                 _ -> ?LOG("received get_data instruction with invalid status !")
             end,
             query_run(Children, Neighbours, IsLeader);
 
         {get_query, Type, DataInfo, QueryPid} -> % message received from another query node
-            QueryPid ! {reply, find_among_children(Type, DataInfo, Children)},
+            QueryPid ! find_among_children(Type, DataInfo, Children),
             query_run(Children, Neighbours, IsLeader);
 
         % -- default case --
-        _ -> ?LOG("Received something unusual"),
+        X -> ?LOG({"Received something unusual", X}),
              query_run(Children, Neighbours, IsLeader)
 
     after ?RESET_TIME ->
@@ -137,21 +141,41 @@ store_data_simple(Children, Dataname, DataSize, Data, ClientPid) ->
             UpdatedChildren
     end.
 
-store_data_distributed(Children,Dataname, DataSize, Data, ClientPid) ->
+store_data_distributed(Children, Dataname, DataSize, Data, ClientPid) ->
+    UUID = get_uuid(),
     ClientPid ! {ack, {distributed, Dataname, UUID}},
     Children.
 
 store_data_critical(Children, Dataname, DataSize, Data, ClientPid) ->
+    UUID = get_uuid(),
     ClientPid ! {ack, {critical, Dataname, UUID}},
     Children.
 
 
-find_among_children(DataInfo, Children) ->
-    Results = lists:map(fun (X) ->
-                            X ! {}
+find_among_children(Type, DataInfo, Children) ->
+    % Type = (fetch_data | release_data)
+    lists:map(fun (X) ->
+                X ! {Type, DataInfo, self()},
+                receive R -> R
+                after ?QUERY_TIMEOUT_TIME -> no_response
+                end
+              end,
+              maps:keys(Children)).
 
-                maps:keys(Children)),
+send_data_back_simple(ClientPid, Answers) ->
+    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
+    case length(Data) of
+        0 -> ClientPid ! not_found;
+        _ -> ClientPid ! hd(Data)
+    end.
 
+send_data_back_distributed(ClientPid,Answers) ->
+    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
+    todo.
+
+send_data_back_critical(ClientPid,Answers) ->
+    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
+    todo.
 
 % ------------------- Utility function working on data -------------------------
 split_data(Data) -> Data.

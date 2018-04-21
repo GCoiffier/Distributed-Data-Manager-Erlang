@@ -36,28 +36,19 @@ storage_run(DataDict,Fathers) ->
             {Dataname, DataID, Data} = Request,
             storage_run(dict:append({Dataname, DataID}, Data, DataDict), Fathers);
 
-        {fetch_data, Request} ->
-            ?LOG("Someone asked me to give him data!"),
-            {Dataname, UUID, Pid} = Request,
+        {GetRequest, DataInfo, ReturnPid} when (GetRequest =:= fetch_data) or (GetRequest =:= release_data) ->
+            {_, Dataname, UUID} = DataInfo,
             Key = {Dataname, UUID},
             case dict:find(Key, DataDict) of
-                error -> Pid ! not_found;
-                {ok, Value} -> Pid ! {data, Value}
+                error -> ReturnPid ! not_found;
+                {ok, Value} -> ReturnPid ! {data, Value}
             end,
-            storage_run(DataDict,Fathers);
-
-        {release_data, Request} ->
-            ?LOG("Someone asked me to release some data"),
-            {Dataname, UUID, Pid} = Request,
-            Key = {Dataname, UUID},
-            case dict:find(Dataname, DataDict) of
-                error -> Pid ! not_found;
-                {ok, Value} -> Pid ! {data, Value}
-            end,
-            storage_run(dict:erase(Key,DataDict),Fathers);
+            case GetRequest of
+                fetch_data -> storage_run(DataDict,Fathers);
+                release_data -> storage_run(dict:erase(Key,DataDict),Fathers)
+            end;
 
         {kill} ->
-            ?LOG("Someone asked me to commit suicide!"),
             lists:map(fun (Pid) -> Pid ! {kill_child, self()} end, sets:to_list(Fathers));
 
         X -> ?LOG({"Received something unusual :", X}),
