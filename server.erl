@@ -16,11 +16,6 @@
 %% -----------------------------------------------------------------------------
 
 % % % % %
-% Bootstrapping code
-% % % % %
--on_load(server_init/0).
-
-% % % % %
 % Spawns N= NB_QUERY_NODE query nodes and connect them together.
 % % % % %
 server_init() ->

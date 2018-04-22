@@ -77,7 +77,9 @@ send_data(Filename,Status) ->
             end
     end.
 
-send_data(Filename) -> send_data(Filename,simple).
+send_data(_) ->
+    io:fwrite("You need to provide a storage mode as a second argument.~nStorage mode available :~n  -simple~n  -distributed~n  -critical~n"),
+    finished.
 
 % % % % %
 % Retrieve data Filename from the network.
@@ -135,7 +137,7 @@ retrieve_data(DataInfo, Type) ->
             io:fwrite("Data ~p successfully retrieved from the network~n", [Filename]),
             writefile(Filename, Data);
         not_found -> io:fwrite("Data ~p does not seem to be stored in the network ~n",[Filename])
-    after ?CLIENT_TIMEOUT_TIME*30 ->
+    after ?CLIENT_TIMEOUT_TIME*10 ->
         io:fwrite("Timeout~n")
     end.
 

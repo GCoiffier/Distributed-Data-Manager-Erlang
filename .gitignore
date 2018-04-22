@@ -2,5 +2,5 @@
 *.dump
 output/*
 report/*
-!report/*.pdf
 !report/*.tex
+!report/*.bib

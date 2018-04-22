@@ -73,8 +73,8 @@ query_run(Children, Neighbours, IsLeader) ->
         {kill_query, Pid} -> query_run(Children, sets:del_element(Pid,Neighbours), IsLeader);
 
         {kill} ->
-            ?LOG("Someone asked me to commit suicide!"),
             lists:map(fun (Pid) -> Pid ! {kill_query, self()} end, Neighbours);
+            % simply don't call back query_run
 
         % -- Data protocol --
         {store_data, Request} ->
@@ -99,12 +99,13 @@ query_run(Children, Neighbours, IsLeader) ->
             {StorageType, _, _} = DataInfo,
             NeighbourAnswer = lists:map( fun (X) ->
                                             X ! {get_query, Type, DataInfo, self()},
-                                            receive R -> R
+                                            receive {reply, R} -> R
                                             after ?QUERY_TIMEOUT_TIME -> no_response
                                             end
                                          end,
                                          sets:to_list(Neighbours)),
-            Answers = lists:flatten([find_among_children(Type,DataInfo,Children) | NeighbourAnswer]),
+            Answers = lists:concat(lists:filter(fun(L) -> length(L)>0 end, [find_among_children(Type,DataInfo,Children) | NeighbourAnswer])),
+            ?LOG(Answers),
             case StorageType of
                 simple -> send_data_back_simple(ClientPid, Answers);
                 distributed -> send_data_back_distributed(ClientPid, Answers);
@@ -114,7 +115,7 @@ query_run(Children, Neighbours, IsLeader) ->
             query_run(Children, Neighbours, IsLeader);
 
         {get_query, Type, DataInfo, QueryPid} -> % message received from another query node
-            QueryPid ! find_among_children(Type, DataInfo, Children),
+            QueryPid ! {reply, find_among_children(Type, DataInfo, Children)},
             query_run(Children, Neighbours, IsLeader);
 
         % -- default case --
@@ -146,41 +147,42 @@ store_data_distributed(Children, Dataname, DataSize, Data, ClientPid) ->
     ClientPid ! {ack, {distributed, Dataname, UUID}},
     Children.
 
-store_data_critical(Children, Dataname, DataSize, Data, ClientPid) ->
+store_data_critical(Children, Dataname, DataSize , Data, ClientPid) ->
     UUID = get_uuid(),
+    lists:map(fun (Node) -> Node ! {store_data, {Dataname, UUID, Data}} end, maps:keys(Children)),
+    UpdatedChildren = lists:foldl(fun (Node,M) -> maps:update(Node, fun (Old) -> Old+DataSize end, M) end, Children, maps:keys(Children)),
     ClientPid ! {ack, {critical, Dataname, UUID}},
-    Children.
+    UpdatedChildren.
 
 
 find_among_children(Type, DataInfo, Children) ->
     % Type = (fetch_data | release_data)
-    lists:map(fun (X) ->
+    L = lists:map(fun (X) ->
                 X ! {Type, DataInfo, self()},
-                receive R -> R
+                receive {reply, R} -> R
                 after ?QUERY_TIMEOUT_TIME -> no_response
                 end
               end,
-              maps:keys(Children)).
+              maps:keys(Children)),
+    lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, L).
 
 send_data_back_simple(ClientPid, Answers) ->
-    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
-    case length(Data) of
+    case length(Answers) of
         0 -> ClientPid ! not_found;
-        _ -> ClientPid ! hd(Data)
+        _ -> ClientPid ! {data, hd(Answers)}
     end.
 
 send_data_back_distributed(ClientPid,Answers) ->
-    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
     todo.
 
-send_data_back_critical(ClientPid,Answers) ->
-    Data = lists:filter(fun (X) -> (X /= not_found) and (X /= no_response) end, Answers),
-    todo.
+send_data_back_critical(ClientPid, Answers) ->
+    % exactly the same protocol, except that the data is now present several times in 'answer'
+    send_data_back_simple(ClientPid, Answers).
 
 % ------------------- Utility function working on data -------------------------
-split_data(Data) -> Data.
+split_data(Data) -> [Data].
 
-merge_data(DataList) -> DataList.
+merge_data(DataList) -> hd(DataList).
 
 % ------------------- Utility functions misc  -------------------------
 

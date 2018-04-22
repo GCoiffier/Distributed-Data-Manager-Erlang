@@ -29,10 +29,6 @@ storage_run(DataDict,Fathers) ->
         {kill_father, Pid} -> storage_run(DataDict, sets:del_element(Pid, Fathers));
 
         {store_data, Request} ->
-
-            ?LOG("Someone asked me to store datas!"),
-            ?LOG({"What I received :", Request}),
-
             {Dataname, DataID, Data} = Request,
             storage_run(dict:append({Dataname, DataID}, Data, DataDict), Fathers);
 
@@ -40,8 +36,8 @@ storage_run(DataDict,Fathers) ->
             {_, Dataname, UUID} = DataInfo,
             Key = {Dataname, UUID},
             case dict:find(Key, DataDict) of
-                error -> ReturnPid ! not_found;
-                {ok, Value} -> ReturnPid ! {data, Value}
+                error -> ReturnPid ! {reply, not_found};
+                {ok, Value} -> ReturnPid ! {reply, Value}
             end,
             case GetRequest of
                 fetch_data -> storage_run(DataDict,Fathers);
