@@ -1,4 +1,4 @@
-\documentclass[a4paper]{report}
+\documentclass[a4paper]{article}
 
 %% Language and font encodings
 \usepackage[french]{babel}
@@ -8,27 +8,32 @@
 \usepackage{xspace}
 \usepackage[table,xcdraw]{xcolor}
 \usepackage{multirow}
-\usepackage{graphicx}
 \usepackage{float}
 \usepackage{titlesec}
-\usepackage{multicol}
+\usepackage{lipsum}
 
 %% Sets page size and margins
-\usepackage[a4paper,top=3cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+\usepackage[a4paper,top=3cm,bottom=2cm,left=3.5cm,right=3.5cm,marginparwidth=1.75cm]{geometry}
 
 %% Useful packages
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
 \usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
-\usepackage[section]{placeins}
+\usepackage[linesnumbered, ruled, vlined]{algorithm2e}
+\usepackage{algorithmic}
+\usepackage{etoolbox}
 
-\titleformat{\chapter}%
-  {\normalfont\bfseries\Huge}{\thechapter.}{10pt}{}
-\newpagestyle{mystyle}{
-  \sethead[][\thechapter.\enspace\chaptertitle][]{}{\thesection~\sectiontitle}{}
-\setfoot{}{\thepage}{}}
+\patchcmd{\thebibliography}{\section*}{\section*}{}{}
+\patchcmd{\thetoc}{\section*}{\section*}{}{}
+
+\titleformat{\section}
+  {\normalfont\LARGE\bfseries}{\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{3.5ex plus 1ex minus .2ex}{2.3ex plus .2ex}
+
 
 \begin{document}
 
@@ -47,22 +52,19 @@
 	\href{mailto:guillaume.coiffier@ens-lyon.fr}{guillaume.coiffier@ens-lyon.fr}\\
 }
 
-\vspace{10cm}
+\vfill
 L'intégralité du code source est disponible à l'adresse suivante : \\
 \url{https://github.com/GCoiffier/Distributed-Data-Manager-Erlang}
 
-\vfill
-
 \end{center}
+\tableofcontents
+\vspace{4cm}
 \end{titlepage}
 
-
-\tableofcontents
-
-\chapter{Description du programme}
+\section{Description du programme}
 \label{chap:description}
 
-\section{Topologie du réseau}
+\subsection{Topologie du réseau}
 
 Nous avons fait le choix d'imposer une topologie précise à notre réseau, plutôt que de gérer une topologie arbitraire.
 Les conséquences de ce choix sont discutées en chapitre \ref{chap:discussion}. \\

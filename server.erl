@@ -39,7 +39,6 @@ server_run(QueryNodeSet) ->
     % Handles new connections and reply to pings
     receive
         {ping, Pid} ->
-            % ?LOG("Master was pinged !"),
             Pid ! {pong, self()},
             server_run(QueryNodeSet);
 

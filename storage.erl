@@ -30,7 +30,7 @@ storage_run(DataDict,Fathers) ->
 
         {store_data, Request} ->
             {Dataname, DataID, Data} = Request,
-            storage_run(dict:append({Dataname, DataID}, Data, DataDict), Fathers);
+            storage_run(append(DataDict, {Dataname, DataID}, Data), Fathers);
 
         {GetRequest, DataInfo, ReturnPid} when (GetRequest =:= fetch_data) or (GetRequest =:= release_data) ->
             {_, Dataname, UUID} = DataInfo,

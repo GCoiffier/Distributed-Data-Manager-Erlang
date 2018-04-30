@@ -1,7 +1,7 @@
 -module(client).
 
 %% -----------------------------------------------------------------------------
--export([connect/1]).
+-export([connect/1, disconnect/0]).
 -export([send_data/1, send_data/2]).
 -export([fetch_data/1, release_data/1]).
 -export([broadcast/1, scatter/1]).
@@ -20,6 +20,9 @@
 
 %% -----------------------------------------------------------------------------
 
+% % % % %
+% Connects to a Node, where a server should be running
+% % % % %
 connect(Node) ->
     compile:file(utilities),
     IPid = spawn_link(utilities, store_id, []),
@@ -34,6 +37,11 @@ connect(Node) ->
         io:fwrite("Error : the client is unable to connect~n")
     end.
 
+disconnect() ->
+    neighbours ! kill,
+    unregister(neighbours),
+    id_storage ! kill,
+    unregister(id_storage).
 
 % % % % %
 % Reads data from Filename and send it to the network
