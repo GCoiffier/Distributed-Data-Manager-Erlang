@@ -1,17 +1,19 @@
 -module(client).
 
 %% -----------------------------------------------------------------------------
--export([connect/1, disconnect/0]).
+-export([connect/1, disconnect/0, update_connection/1]).
 -export([send_data/1, send_data/2]).
 -export([fetch_data/1, release_data/1]).
 -export([broadcast/1, scatter/1]).
 -export([get_stored/0]).
 
+-export([kill_node/0, kill_node/1, add_node/2, shutdown/0]).
+
 %% -----------------------------------------------------------------------------
 -define(CLIENT_TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
 
--define(DEBUG,true).
+% -define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -37,11 +39,25 @@ connect(Node) ->
         io:fwrite("Error : the client is unable to connect~n")
     end.
 
+% % % % %
+% Resets the list of available nodes and the storage list.
+% % % % %
 disconnect() ->
     neighbours ! kill,
     unregister(neighbours),
     id_storage ! kill,
     unregister(id_storage).
+
+% % % % %
+% Asks server running on Node to give its query node list.
+% % % % %
+update_connection(Node) ->
+    {master, Node} ! {connect_request, self()},
+    receive {reply, L} ->
+        neighbours ! {add_list, L}
+    after ?CLIENT_TIMEOUT_TIME ->
+        io:fwrite("Error : the client is unable to connect~n")
+    end.
 
 % % % % %
 % Reads data from Filename and send it to the network
@@ -77,7 +93,8 @@ send_data(Filename,Status) ->
                 {ack, DataInfo} ->
                     io:fwrite("Send successful~n"),
                     ?LOG({"After send, retrived", DataInfo}),
-                    id_storage ! {add, Filename, DataInfo};
+                    id_storage ! {add, Filename, DataInfo},
+                    ok;
 
                 fail -> io:fwrite("Send Failed~n")
 
@@ -88,7 +105,7 @@ send_data(Filename,Status) ->
 
 send_data(_) ->
     io:fwrite("You need to provide a storage mode as a second argument.~nStorage mode available :~n  -simple~n  -distributed~n  -critical~n  -hybrid~n"),
-    finished.
+    ok.
 
 % % % % %
 % Retrieve data Filename from the network.
@@ -122,6 +139,7 @@ release_data(Filename) ->
     after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("Error : client seems disconnected from its dictionnary ~n")
 end.
+
 % % % % %
 % Sends a message to every query node of the server
 % % % % %
@@ -150,9 +168,21 @@ retrieve_data(DataInfo, Type) ->
         io:fwrite("Timeout~n")
     end.
 
+% -------------------- Functions  modifying the network ------------------------
 
+kill_node() -> kill_node(get_random_node()).
 
-% ------------------------- Utility functions -----------------------------------
+kill_node(Pid) ->
+    Pid ! {kill, proper},
+    neighbours ! {del, Pid}.
+
+add_node(MasterNode, NewNode) ->
+    {master, MasterNode} ! {init_new_node, NewNode}.
+
+shutdown() ->
+    get_random_node() ! shutdown.
+
+% ------------------------- Utility functions ----------------------------------
 
 get_stored() ->
     id_storage ! {get_stored, self()},
@@ -169,8 +199,11 @@ get_neighbours() ->
     end.
 
 get_random_node() ->
-    L = get_neighbours(),
-    lists:nth(random:uniform(length(L))-1, L).
+    neighbours ! {get_one, self()},
+    receive {reply, X} -> X
+    after ?CLIENT_TIMEOUT_TIME ->
+        io:fwrite("in get_random_node() : the node seems to be disconnected"), none
+    end.
 
 % ------------------- Utility function working on data -------------------------
 

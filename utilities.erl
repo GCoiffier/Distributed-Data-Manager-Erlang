@@ -3,6 +3,10 @@
 -export([store/0, store_id/0]).
 
 % ------------------------------ Utilities -------------------------------------
+
+% % % % %
+% Storing data in a set
+% % % % %
 store() -> store(sets:new()).
 store(S) ->
     receive
@@ -24,7 +28,9 @@ store(S) ->
         {kill} -> ok
     end.
 
-
+% % % % %
+% Storing data in a map
+% % % % %
 store_id() -> store_id(maps:new()).
 store_id(M) ->
     receive

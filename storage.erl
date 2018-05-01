@@ -4,7 +4,7 @@
 -export([storage_init/0]).
 
 %% ----------------------------------------------------------------------------
--define(DEBUG,true).
+% -define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -44,10 +44,9 @@ storage_run(DataDict,Fathers) ->
                 release_data -> storage_run(dict:erase(Key,DataDict),Fathers)
             end;
 
-        {kill} ->
-            lists:map(fun (Pid) -> Pid ! {kill_child, self()} end, sets:to_list(Fathers));
+        kill -> ok;
 
-        X -> ?LOG({"Received something unusual :", X}),
+        _X -> ?LOG({"Received something unusual :", _X}),
              storage_run(DataDict,Fathers)
 
     end. %end receive

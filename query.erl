@@ -5,7 +5,7 @@
 %% ----------------------------------------------------------------------------
 -export([query_init/1]).
 %% ----------------------------------------------------------------------------
--define(DEBUG,true).
+% -define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -62,10 +62,12 @@ query_run(Children, Neighbours, IsLeader) ->
             query_run(Children, Neighbours, IsLeader);
 
         % -- Leader election protocol --
+        you_are_leader -> query_run(Children, Neighbours, true);
+
         election -> query_run(Children, Neighbours, leader_election(Neighbours));
 
         % -- Birth / Death of processes --
-        {new_child, Pid} -> query_run(maps:put(Pid,0,Children), Neighbours, IsLeader);
+        {new_child, Pid, Storage} -> query_run(maps:put(Pid,Storage,Children), Neighbours, IsLeader);
 
         {kill_child, Pid} -> query_run(maps:remove(Pid,Children), Neighbours, IsLeader);
 
@@ -73,9 +75,23 @@ query_run(Children, Neighbours, IsLeader) ->
 
         {kill_query, Pid} -> query_run(Children, sets:del_element(Pid,Neighbours), IsLeader);
 
-        {kill} ->
-            lists:map(fun (Pid) -> Pid ! {kill_query, self()} end, Neighbours);
-            % simply don't call back query_run
+        {kill, proper} ->
+            ?LOG("Processus terminating"),
+            lists:map(fun (Pid) -> Pid ! {kill_query, self()} end, sets:to_list(Neighbours)),
+            lists:map(fun ({Pid,Storage}) ->
+                        Pid ! {kill_father, self()} ,
+                        NewFather = get_random_query(Neighbours),
+                        Pid ! {new_father, NewFather},
+                        NewFather ! {new_child, Pid, Storage} end, maps:to_list(Children)),
+            if IsLeader -> get_random_query(Neighbours) ! you_are_leader;
+               true -> ok
+            end;
+
+        {kill, ending} -> ?LOG("Processus terminating"),
+                          lists:map(fun (Pid) -> Pid ! kill end, maps:keys(Children));
+
+        shutdown -> master ! shutdown,
+                    query_run(Children, Neighbours, IsLeader);
 
         % -- Data protocol --
         {store_data, Request} ->
@@ -123,7 +139,7 @@ query_run(Children, Neighbours, IsLeader) ->
             query_run(Children, Neighbours, IsLeader);
 
         % -- default case --
-        X -> ?LOG({"Received something unusual", X}),
+        _X -> ?LOG({"Received something unusual", _X}),
              query_run(Children, Neighbours, IsLeader)
 
     after ?RESET_TIME ->
@@ -201,7 +217,6 @@ split_data_aux(L, _, _, 1) -> [L];
 split_data_aux(L, N, K, M) ->
     {A, B} = lists:split(N div K, L),
     [A | split_data_aux(B, N, K, M-1)].
-
 
 % % % % % %
 % Merge a list of chunks of data
