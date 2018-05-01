@@ -5,7 +5,7 @@
 -export([compile/2, send_code/2]).
 
 %% -----------------------------------------------------------------------------
-% -define(DEBUG,true).
+%-define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -53,6 +53,9 @@ server_run(QueryNodeSet) ->
             lists:map(fun (X) -> Pid ! {new_query, X} end, sets:to_list(QueryNodeSet)),
             lists:map(fun (X) -> X ! {new_query, Pid} end, sets:to_list(QueryNodeSet)),
             server_run(sets:add_element(Pid, QueryNodeSet));
+
+        {ask_query, Pid} ->
+            Pid ! {new_father, hd(sets:to_list(QueryNodeSet))};
 
         {connect_request, Pid} ->
             Pid ! {reply, sets:to_list(QueryNodeSet)},

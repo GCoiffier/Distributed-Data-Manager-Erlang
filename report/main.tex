@@ -8,9 +8,11 @@
 \usepackage{xspace}
 \usepackage[table,xcdraw]{xcolor}
 \usepackage{multirow}
+\usepackage{multicol}
 \usepackage{float}
 \usepackage{titlesec}
 \usepackage{lipsum}
+\usepackage{enumitem}
 
 %% Sets page size and margins
 \usepackage[a4paper,top=3cm,bottom=2cm,left=3.5cm,right=3.5cm,marginparwidth=1.75cm]{geometry}
@@ -27,7 +29,6 @@
 \usepackage{algorithmic}
 \usepackage{etoolbox}
 
-\patchcmd{\thebibliography}{\section*}{\section*}{}{}
 \patchcmd{\thetoc}{\section*}{\section*}{}{}
 
 \titleformat{\section}
@@ -61,54 +62,250 @@ L'intégralité du code source est disponible à l'adresse suivante : \\
 \vspace{4cm}
 \end{titlepage}
 
-\section{Description du programme}
-\label{chap:description}
+\section{Description de la solution proposée}
+\label{sec:description}
+
+La solution que nous proposons dans ce projet a été inspirée du fonctionnement du middleware DIET \footnote{\url{https://graal.ens-lyon.fr/diet/}}
+pour ce qui est de la classification des agents en plusieurs tâches et catégories. La topologie est cependant complétement différente.
 
 \subsection{Topologie du réseau}
 
 Nous avons fait le choix d'imposer une topologie précise à notre réseau, plutôt que de gérer une topologie arbitraire.
-Les conséquences de ce choix sont discutées en chapitre \ref{chap:discussion}. \\
+Les conséquences de ce choix sont discutées en section \ref{sec:discussion}. \\
 On distinguera, dans le réseau, trois types d'agents :
 \begin{itemize}
-\item Le noeud \textbf{master}, responsable des connections entrantes au réseau.
-\item Les noeuds de requête (\textbf{query}), responsables de la gestion des
+\item L'agent \textbf{master}, responsable des connections entrantes au réseau.
+\item Les agents de requête (\textbf{query}), responsables de la gestion des
 requêtes de stockage et d'accès aux données.
-\item Les noeuds de stockage (\textbf{storage}) responsables... du stockage des données.
+\item Les agents de stockage (\textbf{storage}) responsables... du stockage des données.
 \end{itemize}
 
 Le noeud \textbf{master} est relié à l'intégralité des noeuds \textbf{query}. Ces derniers
-forment une clique. Dans la pratique, ils ont simplement accès à la liste des Pid de tous les autres noeuds query. \
+forment une clique. Dans la pratique, ils ont simplement accès à la liste des PiD de tous les autres noeuds query.
 Enfin, les noeuds de stockages sont reliés à un ou plusieurs noeuds \textbf{query} et forment leurs fils.
 
-\section{Initialisation du serveur}
+\subsection{Initialisation du serveur}
 
-Le noeud master (module \texttt{server.erl}) est responsable de l'Initialisation du serveur. Il est lancé lorsque l'on
+L'agent \textbf{master} (dont le code se situe dans le module \texttt{server.erl}) est responsable de l'initialisation du serveur. Il est lancé lorsque l'on
 compile le module \texttt{server}. Il a la tâche d'initialiser N noeuds de requêtes, qui vont à leur tour initialiser M noeuds de stockage chacun. \\
 Les valeurs par défaut de N et M sont respectivement 10 et 5.
 
-\section{Méthode de stockage}
-Le stockage des données est assuré par un
+\subsection{Méthode de stockage}
+Le stockage des données est assuré par les agents de stockages. Dans la pratique,
+ces agents disposent d'une structure de données de type dictionnaire, associant,
+à un identifiant unique, un morceau de données. Il est possible de communiquer avec
+ces agents pour leur envoyer des données à stocker, et pour récupérer les données associées à un identifiant.
 
-\chapter{Fonctionnement du programme}
-\label{chap:fonctionnement}
+\section{Fonctionnement du programme}
+\label{sec:fonctionnement}
 
-\section{Interface client}
+\subsection{Interface client}
 
 L'interface du client est décrite par le module \texttt{client.erl}. Elle comprend les fonctions suivantes :
+\begin{multicols}{2}
 \begin{itemize}
     \item \texttt{connect/1}
+    \item \texttt{disconnect/0}
+    \item \texttt{update\_connection/0}
     \item \texttt{send\_data/2}
-    \item \texttt{fetch\_data/}
-    \item \texttt{release\_data}
+    \item \texttt{fetch\_data/1}
+    \item \texttt{release\_data/1}
+    \item \texttt{get\_stored/0}
+    \item \texttt{add\_to\_node/2}
+    \item \texttt{kill\_process/1}
 \end{itemize}
+\end{multicols}
 
-\section{Gestion des requêtes d'un client par les noeuds de requête}
+Grâce à cette interface, on peut communiquer avec le serveur de façon simple. Les fonctions \texttt{client:connect/1},
+\texttt{client:disconnect/0} et \texttt{client:update\_connection/1} servent pour la connexion au serveur.
 
-\chapter{Discussion sur les performances et la robustesse de la solution choisie}
-\label{chap:discussion}
+Dans la pratique,la fonction \texttt{client:connect/1} prend en argument le nom du noeud
+sur lequel tourne l'agent \textbf{master}.
+Elle demande à cet agent la liste des agents de requêtes disponibles sur le réseau,
+et stocke cette liste dans un petit processus annexe
+(consistant, comme pour les agents de stockages, en une boucle sur une structure
+de \emph{set} avec laquelle on peut communiquer).
 
-\section{Robustesse du réseau}
+À chaque requête effectuée sur le réseau, le client choisit au hasard parmi les agents de requêtes
+dont il dispose et envoie sa requête à l'agent choisi.
 
-\section{Complexité de communication}
+La fonction \texttt{client:disconnect/0} réinitialise le client.
+
+La fonction \texttt{client:update\_connection/1} est similaire à la fonction \texttt{client:connect/1}
+sauf qu'elle suppose une initialisation du client et de la connexion.
+
+\subsection{Les requêtes \emph{send}}
+\label{ssec:send}
+Les requêtes \emph{send} sont les requêtes demandant le stockage d'une donnée particulière
+sur le réseau. Elles sont gérées par la fonction \texttt{client:send\_data/2}. Cette fonction
+prend en argument le nom du fichier à envoyer ainsi qu'un mode de stockage.
+
+Le fichier à envoyer doit se trouver dans le sous dossier \emph{data}. Aucune hypothèse n'est faite sur son extension
+(et nous pouvons constater qu'il est tout à fait possible d'envoyer et de récupérer des extensions complexes telles que le .odt)
+
+Le mode de stockage est un \emph{atom}. Quatre modes sont disponibles:
+\begin{description}
+    \item[simple] : le fichier est envoyé en entier sur un agent de stockage. Pas de redondance
+    \item[critical] : le fichier est dupliqué et envoyé en entier sur l'intégralité
+    des agents de stockage d'un certain agent de requête. Redondance forte.
+    \item[distributed] : le fichier est découpé en morceaux, et chaque morceau
+    est stocké sur l'un des agents de stockage d'un certain agent de requête.
+    \item[hybrid] : le fichier est découpé en morceaux, et stockés en double sur les fils de deux agents de requêtes. Ce mode
+    de stockage introduit également de la redondance, mais à moins grande échelle que le mode \emph{critical}.
+\end{description}
+
+Une requête \emph{send} est envoyée par un client à n'importe quel agent de requête du serveur.
+Cet agent, noté $\mathcal{A}$, sera responsable du stockage des données. La procédure varie en fonction du mode de stockage :
+\begin{description}
+    \item[simple] : $\mathcal{A}$ choisit, parmi les agents de stockages dont il a accès, celui qui stocke le moins de données, et lui demande de stocker cette nouvelle donnée.
+    \item[critical] : $\mathcal{A}$ envoie la donnée à chacun de ses agents de stockage.
+    \item[distributed] : $\mathcal{A}$ découpe la donnée en autant de morceaux qu'il a d'agents de stockage, puis distribue les données.
+    \item[hybrid] : $\mathcal{A}$ effectue les mêmes opérations que pour \emph{distributed}, puis choisit un autre agent de requête $\mathcal{B}$
+    au hasard et lui demande de stocker la donnée en mode \emph{distributed}.
+\end{description}
+
+Avant d'envoyer les données à leur agents de stockage, les agents de requêtes créent un identifiant pour retrouver la donnée plus tard. Cet identifiant consiste en un tuple contenant
+le nom du fichier de données, la date (an/mois/jour/heure/minute/seconde en temps universel) ainsi qu'un nombre aléatoire entre 0 et 1 000 000 000.
+
+Lorsque la donnée a bien été stockée, le noeud de requête renvoie une confirmation au client, contenant le mode de stockage ainsi que l'identifiant de la donnée.
+Le client stocke ces informations dans un dictionnaire.
+
+\subsection{Les requêtes \emph{retrieve}}
+\label{ssec:retrieve}
+Les requêtes \emph{retrieve} sont de deux types :
+\begin{itemize}
+    \item Les requêtes qui demandent des données sans les supprimer du serveur (\texttt{client:fetch\_data/1})
+    \item Les requêtes qui récupèrent les données du serveur en les supprimant (\texttt{client:release\_data/1})
+\end{itemize}
+La différence entre ces deux requêtes s'effectue chez les agents de stockage, qui suppriment ou non les données
+dont ils disposent.
+
+Les deux fonctions \texttt{client:fetch\_data/1} et \texttt{client:release\_data/1} prennent en argument le nom du fichier à récupérer.
+Grâce à ce nom, le client peut chercher dans son dictionnaire local l'identifiant unique sous lequel est stocké le fichier sur le serveur.
+Cet identifiant est ensuite envoyé à un agent de requête aléatoire.
+
+Côté serveur, lors de la reception d'une requête \emph{retrieve} par un agent de requête, ce dernier demande à tous ses noeuds de stockage si une telle donnée n'existe pas chez eux, et
+broadcast la requête chez tous les autres agents de requête. Ainsi, tous les agents de stockage sont interrogés, et les autres agents de requêtes ne répondent que s'ils ont une réponse
+positive.
+
+L'agent qui a été interrogé par le client récupère donc toutes les réponses :
+\begin{description}
+    \item[simple] : il reçoit un seul élément contenant l'intégralité de la donnée et le renvoie au client
+    \item[critical] : il reçoit un certain nombre de copies de la donnée et en renvoie une au client
+    \item[distributed] : il reçoit les morceaux de la donnée, les remet dans l'ordre, les fusionne, et les renvoie au client.
+    \item[hybrid] : il reçoit en double les morceaux de la donnée, se débarrasse des doublons, fusionne et renvoie le reste.
+\end{description}
+
+Les données récupérées par le client sont écrites dans le dossier \emph{output}
+
+\subsection{Ajout et suppression de noeuds de requête}
+\label{ssec:kill_add}
+Grâce aux fonctions\texttt{add\_to\_node/2} et \texttt{kill\_process/1}, un client peut ajouter
+et supprimer des agents sur le serveur.
+
+Lors de l'ajout d'un agent, on prend en paramètre le noeud sur lequel tourne le master, et un autre noeud (potentiellement le même) sur
+lequel ajouter l'agent. Cet agent rejoins automatiquement la clique des agents de requête, et crées ses propres agents de stockage sur le même noeud.
+
+Lors de la suppression d'un agent de requête, afin de ne pas perdre de données, ses agents de stockages sont cédées chacun à un autre agent de requête tiré au hasard, qui en devient donc responsable.
+
+Il n'est pas possible de supprimer directement un agent de stockage.
+
+\subsection{Election de leader et maintient de l'agent \textbf{master}}
+
+Un protocole d'élection de leader a été mis en place entre les agents de requête. Le leader a la responsabilité d'envoyer des pings au master.
+Dans le cas d'une absence de réponse de la part du master, le leader spawn un nouveau master.
+
+Le protocole d'élection est initié par le leader, lorsque le résultat d'un générateur pseudo-aléatoire prenant des valeurs de 1 à \emph{freq\_leader\_election}, relancé toutes les secondes, vaut 1.
+Dans la pratique, \emph{freq\_leader\_election} vaut 50.
+
+\section{Discussion sur les performances et la robustesse de la solution choisie}
+\label{sec:discussion}
+
+\subsection{Robustesse du réseau}
+
+La structure de clique est la plus solide possible, mais fait intervenir beaucoup de liens. Chaque agent de requête doit, en effet, stocker
+l'intégralité des PiDs des autres agents de requêtes.
+
+De plus, la connexion au reste du réseau des agents de stockage est unique, et pourrait venir à être coupée dans le cas du crash de leur agent de requête.
+Dans un premier temps, nous aavons envisagé de ne pas dissocier un agent de requête de ses agents de stockage.
+Ainsi, la perte de l'agent de requête entrainait la perte pure et simple des données.
+Nous avions l'intention de faire en sorte qu'un agent de stockage ait plusieurs 'pères', permettant une meilleure solidité du réseau.
+Néanmoins, cette solution s'est avérée problématique dans le protocole de récupération des données, car cela multipliait les messages échangés.
+
+Nous avons donc opté pour une deuxième solution : un agent de stockage envoie régulièrement des pings à son père. Lorsque ce dernier ne répond pas, il demande à l'agent master
+un nouvel agent de requête à qui se connecter.
+
+\subsection{Equilibre de la charge en données}
+
+L'équilibre de la charge en données est uniquement géré à l'arrivé de nouvelles données. Lors d'un ajout de données simple, l'agent de requête selectionne
+son agent de stockage qui a le moins de données stockées. L'agent de requête garde toujours en mémoire
+un dictionnaire donnant la charge de ses agents de stockage.
+
+Les données peuvent être considérées comme bien distribuées sur le réseau, car un client
+demande toujours un agent au hasard lors de ses requêtes.
+
+Aucun mécanisme d'équilibrage supplémentaire n'a cependant été implémenté.
+
+Une idée serait de donner aux agents de requête la possibilité de créer de nouveaux agents de stockage lorsque ceux qu'ils possèdent atteignent une charge critique, puis d'implémenter
+un mécanisme de passation de ces agents de stockage à d'autres agents de requête afin d'en équilibrer leur nombre.
+
+\subsection{Complexité de communication}
+
+Les requêtes \emph{send} sont relativement peu gourmandes en messages. Il s'agit juste pour le client d'envoyer un unique message à un agent de requête. Ce dernier ne communiquera ensuite qu'avec ses
+agents de stockage (ou avec un seul autre agent de requête dans le stockage hybrid).
+
+Les requêtes \emph{retrieve}, en revanche, touchent l'intégralité du réseau. Un nombre linéaire (en le nombre d'agents du réseau) de messages est envoyé pour chaque requête, ce qui peut être un problème
+lors du passage à l'échelle. Etant donné la façon dont les données sont distribuées, et que les agents de stockages sont susceptibles de changer de père, il n'est pas possible de faire autrement si l'on veut être sûr de tout bien récupérer.
+
+Des heuristiques peuvent cependant être mises en place : on peut demander aux agents de requête un par un, au lieu de tous en même temps, et s'arrêter dès que l'on a reconstitué les données.
+En revanche, tous les agents seront toujours interrogés dans le pire cas.
+
+\section*{Réponse aux questions}
+Nous détaillons ici les solutions apportées (ou non) aux différentes questions de l'énoncé
+
+\paragraph{Question 1 : topologie}
+\begin{enumerate}[label=\alph*)]
+    \item \textit{Spawn an agent} : \textbf{OK}
+    \item \textit{Have this agent be part of a coherent topology} : \textbf{OK}
+    \item \textit{Be able to have a new agent join the topology} : \textbf{OK}. Il est possible d'ajouter un agent en utilisant la fonction \texttt{client:add\_to\_node/2}
+    (cette fonction prend deux noeuds en paramètre, le noeud où doit se situer le \textbf{master}, et le noeud sur lequel créer le nouvel agent).
+    \item \textit{Remotely kill an agent} : \textbf{OK}. Il est possible de tuer un agent en utilisant la fonction \texttt{client:kill\_process/0} qui tue un agent au hasard (utile pour les tests)
+    ou la fonction \texttt{client:kill\_process/1}, qui tue l'agent dont le PiD a été donné en argument.
+    \item \textit{Have the possibility to detect and react to an agent dying without prior notice} : on ne réagit qu'à la mort de l'agent \textbf{master}. Les crashs des autres agents ne sont pas gérés.
+\end{enumerate}
+
+\paragraph{Question 2 : communication}
+\begin{enumerate}[label=\alph*)]
+    \item \textit{Broadcast} : \textbf{OK} (fonction \texttt{client:broadcast/1})
+    \item \textit{Scatter} : \textbf{OK} (fonction \texttt{client:scatter/1})
+    \item \textit{Leader election} : \textbf{OK}. Utilisée pour pouvoir se maintenir au courant de l'état de l'agent \textbf{master}.
+\end{enumerate}
+
+\paragraph{Question 3 : gestion de données}
+\begin{enumerate}[label=\alph*)]
+    \item \textit{Receive pieces of information, remember them and return a UUID} : \textbf{OK}. Voir la section \ref{ssec:send}
+    \item \textit{Your agents should be able to send back the piece of data corresponding to a UUID} : \textbf{OK}. Voir la section \ref{ssec:retrieve}
+    \item \textit{Make sure that no data is lost when a nodes is asked to shut down} : \textbf{OK}. Voir la section \ref{ssec:kill_add}
+    \item \textit{Have a mechanism to release a specific data (deleting it from all nodes where it is stored);} : \textbf{OK}. Nous avons implémenté deux façons de récupérer les données, \texttt{client:fetch\_data/1} et \texttt{client:release\_data/1}. La seconde fonction efface les données du réseau.
+    \item \textit{Have a mechanism to distribute all the pieces of data evenly across the platform so that no node store them all} :
+    \textbf{$\sim$OK}. La distribution s'effectue par la sélection aléatoire de l'agent de stockage par le client. Aucun mécanisme d'équilibrage interne au réseau n'a été implémenté.
+    \item \textit{Have a mechanism that replicates the pieces of data across the nodes so that multiple nodes
+have it} : \textbf{OK}. Il s'agit des modes de stockage distributed, critical et hybrid.
+    \item \textit{Extra} : Pas de fonctionnalité supplémentaire.
+\end{enumerate}
+
+\paragraph{Question 4 : supervision}
+\begin{enumerate}[label=\alph*)]
+    \item \textit{Given an hostname, remotely spawn an agent on that node and have it join the topology} : \textbf{OK}. Il est possible d'ajouter un agent en utilisant la fonction \texttt{client:add\_to\_node/2}. Le second argument de cette fonction est le noeud d'accueil.
+    \item \textit{Given an hostname, remove the corresponding node from the platform and return the hostname of
+a node still in the topology} : \textbf{OK}. De même, la fonction \texttt{client:kill\_process/1} ne fait pas d'hypothèses sur le noeud sur lequel se trouve l'agent à tuer.
+    \item \textit{Send data to a platform identified by the hostname of a node in the platform;} : \textbf{OK}. La gestion des différents noeuds est en réalité parfaitement transparente
+    \item \textit{Given an UUID, retrieve the corresponding piece of data from a platform identified by the hostname
+of a node in the platform} : \textbf{OK}
+    \item \textit{Given an UUID, release the corresponding piece of data from a platform identified by the
+hostname of a node in the platform} : \textbf{OK}
+    \item \textit{Query the topology for statistics;} : \textbf{NOT OK}.
+    \item \textit{Build a script that, given a set of nodes, automatically deploy the platform.} : \textbf{NOT OK}. Notre script de déploiement ne sert qu'à déployer une plateforme sur un seul noeud. Pour ajouter d'autres noeuds, il faut le faire manuellement.
+\end{enumerate}
 
 \end{document}

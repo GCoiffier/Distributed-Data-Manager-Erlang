@@ -38,10 +38,6 @@ store_id(M) ->
             Pid ! {reply, maps:get(Entryname, M, not_found)},
             store_id(M);
 
-        {get_and_delete, Entryname, Pid} ->
-            Pid ! {reply, maps:get(Entryname, M, not_found)},
-            store_id(maps:remove(Entryname,M));
-
         {get_stored, Pid} ->
             Pid ! {reply, maps:keys(M)},
             store_id(M);

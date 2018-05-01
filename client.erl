@@ -7,13 +7,13 @@
 -export([broadcast/1, scatter/1]).
 -export([get_stored/0]).
 
--export([kill_node/0, kill_node/1, add_node/2, shutdown/0]).
+-export([kill_process/0, kill_process/1, add_to_node/2, shutdown/0]).
 
 %% -----------------------------------------------------------------------------
 -define(CLIENT_TIMEOUT_TIME, 1000).
 %% -----------------------------------------------------------------------------
 
-% -define(DEBUG,true).
+%-define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -129,12 +129,14 @@ end.
 % If the Data couldn't be found, does nothing
 % % % % %
 release_data(Filename) ->
-    id_storage ! {get_and_delete, Filename, self()},
+    id_storage ! {get, Filename, self()},
     receive
         {reply, not_found} ->
             io:fwrite("Error : no information about ~p being stored in the network ~n", [Filename]);
 
-        {reply, DataInfo} -> retrieve_data(DataInfo, release_data)
+        {reply, DataInfo} ->
+            retrieve_data(DataInfo, release_data),
+            id_storage ! {del, Filename}
 
     after ?CLIENT_TIMEOUT_TIME ->
         io:fwrite("Error : client seems disconnected from its dictionnary ~n")
@@ -170,13 +172,13 @@ retrieve_data(DataInfo, Type) ->
 
 % -------------------- Functions  modifying the network ------------------------
 
-kill_node() -> kill_node(get_random_node()).
+kill_process() -> kill_process(get_random_node()).
 
-kill_node(Pid) ->
+kill_process(Pid) ->
     Pid ! {kill, proper},
     neighbours ! {del, Pid}.
 
-add_node(MasterNode, NewNode) ->
+add_to_node(MasterNode, NewNode) ->
     {master, MasterNode} ! {init_new_node, NewNode}.
 
 shutdown() ->

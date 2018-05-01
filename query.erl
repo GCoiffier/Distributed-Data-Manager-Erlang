@@ -5,7 +5,7 @@
 %% ----------------------------------------------------------------------------
 -export([query_init/1]).
 %% ----------------------------------------------------------------------------
-% -define(DEBUG,true).
+%-define(DEBUG,true).
 -ifdef(DEBUG).
 -define(LOG(X), io:format("<Module ~p, Line ~p> : ~p~n", [?MODULE,?LINE,X])).
 -else.
@@ -53,7 +53,6 @@ query_run(Children, Neighbours, IsLeader) ->
 
     receive
         {ping, Pid} ->
-            % ?LOG("I was Pinged !"),
             Pid ! pong,
             query_run(Children, Neighbours, IsLeader);
 
@@ -79,7 +78,6 @@ query_run(Children, Neighbours, IsLeader) ->
             ?LOG("Processus terminating"),
             lists:map(fun (Pid) -> Pid ! {kill_query, self()} end, sets:to_list(Neighbours)),
             lists:map(fun ({Pid,Storage}) ->
-                        Pid ! {kill_father, self()} ,
                         NewFather = get_random_query(Neighbours),
                         Pid ! {new_father, NewFather},
                         NewFather ! {new_child, Pid, Storage} end, maps:to_list(Children)),
