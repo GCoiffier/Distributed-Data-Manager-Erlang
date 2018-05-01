@@ -49,13 +49,14 @@ disconnect() ->
 %     - 'simple' : the data is stored in one chunk in one process
 %     - 'distributed' : the data is cut in parts and stored in various processes
 %     - 'critical' : the data is copied several times and stored in whole in different processes
-% If no status is provided, the default status is 'simple'
+%     - 'hybrid' : the data is stored in a distributed way, but with redundancy
 % % % % %
 send_data(Filename,Status) ->
     case Status of
         simple -> ?LOG("Storage mode = SIMPLE");
         distributed -> ?LOG("Storage mode = DISTRIBUTED");
         critical -> ?LOG("Storage mode = CRITICAL");
+        hybrid -> ?LOG("Storage mode = HYBRID");
         _ -> io:fwrite("Storage mode should be in {simple,distributed,critical}. Aborting.~n"),
              exit(send_data)
     end,
@@ -86,7 +87,7 @@ send_data(Filename,Status) ->
     end.
 
 send_data(_) ->
-    io:fwrite("You need to provide a storage mode as a second argument.~nStorage mode available :~n  -simple~n  -distributed~n  -critical~n"),
+    io:fwrite("You need to provide a storage mode as a second argument.~nStorage mode available :~n  -simple~n  -distributed~n  -critical~n  -hybrid~n"),
     finished.
 
 % % % % %

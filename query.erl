@@ -83,10 +83,12 @@ query_run(Children, Neighbours, IsLeader) ->
             case Status of
                 simple -> UpdatedChildren = store_data_simple(Children, Dataname, DataSize, Data, Pid);
 
-                distributed -> UpdatedChildren = store_data_distributed(Children, Dataname, DataSize, Data, Pid);
+                distributed -> UpdatedChildren = store_data_distributed(Children, Dataname, DataSize, Data, Pid, true);
 
                 critical -> UpdatedChildren = store_data_critical(Children, Dataname, DataSize, Data, Pid);
 
+                hybrid -> UpdatedChildren = store_data_distributed(Children, Dataname, DataSize, Data, Pid, false),
+                          get_random_query(Neighbours) ! {store_data, {Dataname, DataSize, Data, distributed, Pid}};
                 _ ->
                     ?LOG("received store_data instruction with invalid status !"),
                     Pid ! fail,
@@ -110,7 +112,8 @@ query_run(Children, Neighbours, IsLeader) ->
             case StorageType of
                 simple -> send_data_back_simple(ClientPid, Answers);
                 distributed -> send_data_back_distributed(ClientPid, Answers);
-                critical -> send_data_back_critical(ClientPid, Answers);
+                hybrid -> send_data_back_distributed(ClientPid, Answers); % exactly same protocol
+                critical -> send_data_back_simple(ClientPid, Answers); %exactly same protocol too
                 _ -> ?LOG("received get_data instruction with invalid status !")
             end,
             query_run(Children, Neighbours, IsLeader);
@@ -142,16 +145,19 @@ store_data_simple(Children, Dataname, DataSize, Data, ClientPid) ->
             UpdatedChildren
     end.
 
-store_data_distributed(Children, Dataname, DataSize, Data, ClientPid) ->
-    store_data_distributed_aux(Children, maps:keys(Children), get_uuid(), Dataname, split_data(Data), ClientPid, 1).
+store_data_distributed(Children, Dataname, _DataSize, Data, ClientPid, Feedback) ->
+    store_data_distributed_aux(Children, maps:keys(Children), get_uuid(), Dataname, split_data(Data), ClientPid, 1, Feedback).
 
-store_data_distributed_aux(Children, [], UUID, Dataname, _, ClientPid, _) ->
-    ClientPid ! {ack, {distributed, Dataname, UUID}},
+store_data_distributed_aux(Children, [], UUID, Dataname, _, ClientPid, _, Feedback) ->
+    case Feedback of
+        true -> ClientPid ! {ack, {distributed, Dataname, UUID}};
+        _ -> ok
+    end,
     Children;
 
-store_data_distributed_aux(Children, [C|L], UUID, Dataname, [D|L2], ClientPid, N) ->
+store_data_distributed_aux(Children, [C|L], UUID, Dataname, [D|L2], ClientPid, N, Feedback) ->
     C ! {store_data, {Dataname, UUID, {N,D}}},
-    store_data_distributed_aux(Children, L, UUID, Dataname, L2, ClientPid, N+1).
+    store_data_distributed_aux(Children, L, UUID, Dataname, L2, ClientPid, N+1, Feedback).
 
 store_data_critical(Children, Dataname, DataSize , Data, ClientPid) ->
     UUID = get_uuid(),
@@ -183,10 +189,6 @@ send_data_back_distributed(ClientPid,Answers) ->
         _ -> ClientPid ! {data, merge_data(Answers)}
     end.
 
-send_data_back_critical(ClientPid, Answers) ->
-    % exactly the same protocol, except that the data is now present several times in 'answer'
-    send_data_back_simple(ClientPid, Answers).
-
 % ------------------- Utility function working on data -------------------------
 % % % % % %
 % Splits Data into ?NB_STORAGE_NODE chunks of equal size
@@ -195,7 +197,7 @@ split_data(List) -> split_data(List, ?NB_STORAGE_NODE).
 
 split_data([], _) -> [];
 split_data(L, K) -> split_data_aux(L, length(L), K, K).
-split_data_aux(L, N, K, 1) -> [L];
+split_data_aux(L, _, _, 1) -> [L];
 split_data_aux(L, N, K, M) ->
     {A, B} = lists:split(N div K, L),
     [A | split_data_aux(B, N, K, M-1)].
@@ -207,12 +209,8 @@ split_data_aux(L, N, K, M) ->
 merge_data(DataList) ->
     Data = sets:to_list(sets:from_list(lists:flatten(DataList))), %get rid of duplicates
     Data2 = lists:sort(fun(A,B) -> {N,_} = A, {M,_} = B, N=<M end, Data),
-    ?LOG(Data2),
-    Data3 = lists:map(fun ({N,X}) -> X end, Data2),
-    ?LOG(Data3),
-    Data4 = lists:flatten(Data3),
-    ?LOG(Data4),
-    Data4.
+    Data3 = lists:map(fun ({_,X}) -> X end, Data2),
+    lists:flatten(Data3).
 
 % ------------------- Utility functions misc  -------------------------
 
@@ -231,6 +229,11 @@ leader_election_aux(Num) ->
     receive {id,Num2} -> leader_election_aux(min(Num,Num2))
     after 1000 -> Num
     end.
+
+get_random_query(Neighbours) ->
+    L = sets:to_list(Neighbours),
+    Index = random:uniform(length(L)),
+	lists:nth(Index,L).
 
 % % % % % %
 % Returns the Pid and the load of the child with minimal load.
